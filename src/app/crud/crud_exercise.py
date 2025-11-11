@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastcrud import FastCRUD
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +11,7 @@ crud_exercises = CRUDExercise(Exercise)
 
 async def create_exercise_with_muscle_groups(
     db: AsyncSession, exercise_data: ExerciseCreate
-) -> dict[str, Any]:
+) -> ExerciseRead:
     """Create an exercise with its secondary muscle groups."""
     # Extract secondary muscle group IDs
     secondary_ids = exercise_data.secondary_muscle_group_ids
@@ -36,20 +34,31 @@ async def create_exercise_with_muscle_groups(
     # Fetch the exercise with relationships
     exercise = await crud_exercises.get(db=db, id=created_exercise.id, schema_to_select=ExerciseRead)
     if exercise is None:
-        return created_exercise
+        # Fallback: create ExerciseRead from created_exercise
+        exercise_dict = {
+            "id": created_exercise.id,
+            "name": created_exercise.name if hasattr(created_exercise, "name") else "",
+            "primary_muscle_group_id": (
+                created_exercise.primary_muscle_group_id
+                if hasattr(created_exercise, "primary_muscle_group_id")
+                else 0
+            ),
+            "secondary_muscle_group_ids": secondary_ids,
+        }
+        return ExerciseRead(**exercise_dict)
 
     # Manually add secondary muscle group IDs
     if isinstance(exercise, dict):
         exercise["secondary_muscle_group_ids"] = secondary_ids
+        return ExerciseRead(**exercise)
     else:
         exercise.secondary_muscle_group_ids = secondary_ids
-
-    return exercise
+        return exercise
 
 
 async def update_exercise_with_muscle_groups(
     db: AsyncSession, exercise_id: int, exercise_data: ExerciseUpdate
-) -> dict[str, Any] | None:
+) -> ExerciseRead | None:
     """Update an exercise and its secondary muscle groups."""
     exercise_dict = exercise_data.model_dump(exclude_unset=True, exclude={"secondary_muscle_group_ids"})
     secondary_ids = exercise_data.secondary_muscle_group_ids
@@ -85,13 +94,14 @@ async def update_exercise_with_muscle_groups(
     if secondary_ids is not None:
         if isinstance(exercise, dict):
             exercise["secondary_muscle_group_ids"] = secondary_ids
+            return ExerciseRead(**exercise)
         else:
             exercise.secondary_muscle_group_ids = secondary_ids
 
-    return exercise
+    return exercise if not isinstance(exercise, dict) else ExerciseRead(**exercise)
 
 
-async def get_exercise_with_muscle_groups(db: AsyncSession, exercise_id: int) -> dict[str, Any] | None:
+async def get_exercise_with_muscle_groups(db: AsyncSession, exercise_id: int) -> ExerciseRead | None:
     """Get an exercise with its secondary muscle group IDs."""
     exercise = await crud_exercises.get(db=db, id=exercise_id, schema_to_select=ExerciseRead)
     if exercise is None:
@@ -109,8 +119,9 @@ async def get_exercise_with_muscle_groups(db: AsyncSession, exercise_id: int) ->
     # Add secondary muscle group IDs to the exercise
     if isinstance(exercise, dict):
         exercise["secondary_muscle_group_ids"] = secondary_ids
+        return ExerciseRead(**exercise)
     else:
         exercise.secondary_muscle_group_ids = secondary_ids
 
-    return exercise
+    return exercise if not isinstance(exercise, dict) else ExerciseRead(**exercise)
 

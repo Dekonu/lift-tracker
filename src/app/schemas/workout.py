@@ -1,10 +1,9 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
-
-if TYPE_CHECKING:
-    from .exercise_instance import ExerciseInstanceRead
 
 
 class WorkoutBase(BaseModel):
@@ -17,6 +16,8 @@ class WorkoutRead(WorkoutBase):
     created_at: datetime
     updated_at: datetime | None
     exercise_instances: list["ExerciseInstanceRead"] = []
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class WorkoutCreate(WorkoutBase):

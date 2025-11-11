@@ -71,18 +71,11 @@ async def read_exercises(
             exercise_id = exercise.id
         exercise_with_mg = await get_exercise_with_muscle_groups(db=db, exercise_id=exercise_id)
         if exercise_with_mg:
+            secondary_ids = exercise_with_mg.secondary_muscle_group_ids
             if isinstance(exercise, dict):
-                exercise["secondary_muscle_group_ids"] = (
-                    exercise_with_mg.get("secondary_muscle_group_ids")
-                    if isinstance(exercise_with_mg, dict)
-                    else exercise_with_mg.secondary_muscle_group_ids
-                )
+                exercise["secondary_muscle_group_ids"] = secondary_ids
             else:
-                exercise.secondary_muscle_group_ids = (
-                    exercise_with_mg.get("secondary_muscle_group_ids")
-                    if isinstance(exercise_with_mg, dict)
-                    else exercise_with_mg.secondary_muscle_group_ids
-                )
+                exercise.secondary_muscle_group_ids = secondary_ids
 
     response: dict[str, Any] = paginated_response(crud_data=exercises_data, page=page, items_per_page=items_per_page)
     return response
