@@ -39,6 +39,8 @@ dependencies = [
 dev = [
     "pytest>=7.4.2",
     "pytest-mock>=3.14.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=1.0.0",
     "faker>=26.0.0",
     "mypy>=1.8.0",
     "types-redis>=4.6.0",
@@ -101,6 +103,16 @@ convention = "numpy"
 [tool.pytest.ini_options]
 filterwarnings = [
     "ignore::PendingDeprecationWarning:starlette.formparsers",
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--cov=src/app",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=95",
+    "-v",
 ]
 
 [dependency-groups]
