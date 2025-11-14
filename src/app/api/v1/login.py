@@ -27,14 +27,14 @@ async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(async_get_db)],
 ) -> dict[str, str]:
-    user = await authenticate_user(username_or_email=form_data.username, password=form_data.password, db=db)
+    user = await authenticate_user(email=form_data.username, password=form_data.password, db=db)
     if not user:
-        raise UnauthorizedException("Wrong username, email or password.")
+        raise UnauthorizedException("Wrong email or password.")
 
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = await create_access_token(data={"sub": user["username"]}, expires_delta=access_token_expires)
+    access_token = await create_access_token(data={"sub": user["email"]}, expires_delta=access_token_expires)
 
-    refresh_token = await create_refresh_token(data={"sub": user["username"]})
+    refresh_token = await create_refresh_token(data={"sub": user["email"]})
     max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
     response.set_cookie(
@@ -54,5 +54,5 @@ async def refresh_access_token(request: Request, db: AsyncSession = Depends(asyn
     if not user_data:
         raise UnauthorizedException("Invalid refresh token.")
 
-    new_access_token = await create_access_token(data={"sub": user_data.username_or_email})
+    new_access_token = await create_access_token(data={"sub": user_data.email})
     return {"access_token": new_access_token, "token_type": "bearer"}

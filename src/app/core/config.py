@@ -10,6 +10,34 @@ env_path = os.path.join(current_file_dir, "..", "..", ".env")
 config = Config(env_path)
 
 
+def get_config(key: str, default: str | None = None, cast=None):
+    """Safely get config value with default fallback."""
+    try:
+        if cast:
+            return config(key, cast=cast, default=default)
+        return config(key, default=default)
+    except KeyError:
+        # If key is missing and no default provided, return None or cast default
+        if default is None:
+            return None
+        if cast:
+            # Handle boolean casting
+            if cast == bool:
+                return default.lower() in ('true', '1', 'yes', 'on') if isinstance(default, str) else bool(default)
+            return cast(default)
+        return default
+    except Exception:
+        # For any other error (like file not found), return the default
+        if default is None:
+            return None
+        if cast:
+            # Handle boolean casting
+            if cast == bool:
+                return default.lower() in ('true', '1', 'yes', 'on') if isinstance(default, str) else bool(default)
+            return cast(default)
+        return default
+
+
 class AppSettings(BaseSettings):
     APP_NAME: str = config("APP_NAME", default="FastAPI app")
     APP_DESCRIPTION: str | None = config("APP_DESCRIPTION", default=None)
@@ -20,10 +48,10 @@ class AppSettings(BaseSettings):
 
 
 class CryptSettings(BaseSettings):
-    SECRET_KEY: SecretStr = config("SECRET_KEY", cast=SecretStr)
-    ALGORITHM: str = config("ALGORITHM", default="HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30)
-    REFRESH_TOKEN_EXPIRE_DAYS: int = config("REFRESH_TOKEN_EXPIRE_DAYS", default=7)
+    SECRET_KEY: SecretStr = get_config("SECRET_KEY", default="_iKGN8PWR4WcQU4EoCRXzjjGNMcYT1GjPaahCtEm0bI", cast=SecretStr)
+    ALGORITHM: str = get_config("ALGORITHM", default="HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = get_config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30)
+    REFRESH_TOKEN_EXPIRE_DAYS: int = get_config("REFRESH_TOKEN_EXPIRE_DAYS", default=7)
 
 
 class DatabaseSettings(BaseSettings):
@@ -48,22 +76,31 @@ class MySQLSettings(DatabaseSettings):
     MYSQL_URL: str | None = config("MYSQL_URL", default=None)
 
 
-class PostgresSettings(DatabaseSettings):
-    POSTGRES_USER: str = config("POSTGRES_USER", default="postgres")
-    POSTGRES_PASSWORD: str = config("POSTGRES_PASSWORD", default="postgres")
-    POSTGRES_SERVER: str = config("POSTGRES_SERVER", default="localhost")
-    POSTGRES_PORT: int = config("POSTGRES_PORT", default=5432)
-    POSTGRES_DB: str = config("POSTGRES_DB", default="postgres")
+class SupabaseSettings(DatabaseSettings):
+    SUPABASE_URL: str = config("SUPABASE_URL", default="")
+    SUPABASE_DB_PASSWORD: str = config("SUPABASE_DB_PASSWORD", default="")
+    SUPABASE_DB_HOST: str = config("SUPABASE_DB_HOST", default="")
+    SUPABASE_DB_PORT: int = config("SUPABASE_DB_PORT", default=5432)
+    SUPABASE_DB_NAME: str = config("SUPABASE_DB_NAME", default="postgres")
+    SUPABASE_DB_USER: str = config("SUPABASE_DB_USER", default="postgres")
     POSTGRES_SYNC_PREFIX: str = config("POSTGRES_SYNC_PREFIX", default="postgresql://")
     POSTGRES_ASYNC_PREFIX: str = config("POSTGRES_ASYNC_PREFIX", default="postgresql+asyncpg://")
-    POSTGRES_URI: str = f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_SERVER}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    POSTGRES_URI: str | None = config("POSTGRES_URI", default=None)
     POSTGRES_URL: str | None = config("POSTGRES_URL", default=None)
+    
+    @property
+    def database_uri(self) -> str:
+        """Get database URI, preferring direct URL or constructing from components."""
+        if self.POSTGRES_URL:
+            return self.POSTGRES_URL.replace("postgresql://", "").replace("postgresql+asyncpg://", "")
+        if self.POSTGRES_URI:
+            return self.POSTGRES_URI
+        return f"{self.SUPABASE_DB_USER}:{self.SUPABASE_DB_PASSWORD}@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
 
 
 class FirstUserSettings(BaseSettings):
     ADMIN_NAME: str = config("ADMIN_NAME", default="admin")
     ADMIN_EMAIL: str = config("ADMIN_EMAIL", default="admin@admin.com")
-    ADMIN_USERNAME: str = config("ADMIN_USERNAME", default="admin")
     ADMIN_PASSWORD: str = config("ADMIN_PASSWORD", default="!Ch4ng3Th1sP4ssW0rd!")
 
 
@@ -71,9 +108,19 @@ class TestSettings(BaseSettings): ...
 
 
 class RedisCacheSettings(BaseSettings):
+    REDIS_CACHE_ENABLED: bool = False
     REDIS_CACHE_HOST: str = config("REDIS_CACHE_HOST", default="localhost")
     REDIS_CACHE_PORT: int = config("REDIS_CACHE_PORT", default=6379)
     REDIS_CACHE_URL: str = f"redis://{REDIS_CACHE_HOST}:{REDIS_CACHE_PORT}"
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Check if Redis is enabled in config, default to False
+        try:
+            enabled = config("REDIS_CACHE_ENABLED", default="false")
+            self.REDIS_CACHE_ENABLED = str(enabled).lower() in ('true', '1', 'yes', 'on')
+        except Exception:
+            self.REDIS_CACHE_ENABLED = False
 
 
 class ClientSideCacheSettings(BaseSettings):
@@ -81,14 +128,34 @@ class ClientSideCacheSettings(BaseSettings):
 
 
 class RedisQueueSettings(BaseSettings):
+    REDIS_QUEUE_ENABLED: bool = False
     REDIS_QUEUE_HOST: str = config("REDIS_QUEUE_HOST", default="localhost")
     REDIS_QUEUE_PORT: int = config("REDIS_QUEUE_PORT", default=6379)
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Check if Redis is enabled in config, default to False
+        try:
+            enabled = config("REDIS_QUEUE_ENABLED", default="false")
+            self.REDIS_QUEUE_ENABLED = str(enabled).lower() in ('true', '1', 'yes', 'on')
+        except Exception:
+            self.REDIS_QUEUE_ENABLED = False
 
 
 class RedisRateLimiterSettings(BaseSettings):
+    REDIS_RATE_LIMIT_ENABLED: bool = False
     REDIS_RATE_LIMIT_HOST: str = config("REDIS_RATE_LIMIT_HOST", default="localhost")
     REDIS_RATE_LIMIT_PORT: int = config("REDIS_RATE_LIMIT_PORT", default=6379)
     REDIS_RATE_LIMIT_URL: str = f"redis://{REDIS_RATE_LIMIT_HOST}:{REDIS_RATE_LIMIT_PORT}"
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Check if Redis is enabled in config, default to False
+        try:
+            enabled = config("REDIS_RATE_LIMIT_ENABLED", default="false")
+            self.REDIS_RATE_LIMIT_ENABLED = str(enabled).lower() in ('true', '1', 'yes', 'on')
+        except Exception:
+            self.REDIS_RATE_LIMIT_ENABLED = False
 
 
 class DefaultRateLimitSettings(BaseSettings):
@@ -97,7 +164,7 @@ class DefaultRateLimitSettings(BaseSettings):
 
 
 class CRUDAdminSettings(BaseSettings):
-    CRUD_ADMIN_ENABLED: bool = config("CRUD_ADMIN_ENABLED", default=True)
+    CRUD_ADMIN_ENABLED: bool = False
     CRUD_ADMIN_MOUNT_PATH: str = config("CRUD_ADMIN_MOUNT_PATH", default="/admin")
 
     CRUD_ADMIN_ALLOWED_IPS_LIST: list[str] | None = None
@@ -130,7 +197,7 @@ class EnvironmentSettings(BaseSettings):
 class Settings(
     AppSettings,
     SQLiteSettings,
-    PostgresSettings,
+    SupabaseSettings,
     CryptSettings,
     FirstUserSettings,
     TestSettings,

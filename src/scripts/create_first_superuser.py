@@ -19,7 +19,6 @@ async def create_first_user(session: AsyncSession) -> None:
     try:
         name = settings.ADMIN_NAME
         email = settings.ADMIN_EMAIL
-        username = settings.ADMIN_USERNAME
         hashed_password = get_password_hash(settings.ADMIN_PASSWORD)
 
         query = select(User).filter_by(email=email)
@@ -33,7 +32,6 @@ async def create_first_user(session: AsyncSession) -> None:
                 metadata,
                 Column("id", Integer, primary_key=True, autoincrement=True, nullable=False),
                 Column("name", String(30), nullable=False),
-                Column("username", String(20), nullable=False, unique=True, index=True),
                 Column("email", String(50), nullable=False, unique=True, index=True),
                 Column("hashed_password", String, nullable=False),
                 Column("profile_image_url", String, default="https://profileimageurl.com"),
@@ -49,7 +47,6 @@ async def create_first_user(session: AsyncSession) -> None:
             data = {
                 "name": name,
                 "email": email,
-                "username": username,
                 "hashed_password": hashed_password,
                 "is_superuser": True,
             }
@@ -59,10 +56,10 @@ async def create_first_user(session: AsyncSession) -> None:
                 await conn.execute(stmt)
                 await conn.commit()
 
-            logger.info(f"Admin user {username} created successfully.")
+            logger.info(f"Admin user {email} created successfully.")
 
         else:
-            logger.info(f"Admin user {username} already exists.")
+            logger.info(f"Admin user {email} already exists.")
 
     except Exception as e:
         logger.error(f"Error creating admin user: {e}")

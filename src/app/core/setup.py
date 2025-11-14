@@ -98,14 +98,29 @@ def lifespan_factory(
         await set_threadpool_tokens()
 
         try:
-            if isinstance(settings, RedisCacheSettings):
-                await create_redis_cache_pool()
+            if isinstance(settings, RedisCacheSettings) and settings.REDIS_CACHE_ENABLED:
+                try:
+                    await create_redis_cache_pool()
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Redis cache not available, continuing without cache: {e}")
 
-            if isinstance(settings, RedisQueueSettings):
-                await create_redis_queue_pool()
+            if isinstance(settings, RedisQueueSettings) and settings.REDIS_QUEUE_ENABLED:
+                try:
+                    await create_redis_queue_pool()
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Redis queue not available, continuing without queue: {e}")
 
-            if isinstance(settings, RedisRateLimiterSettings):
-                await create_redis_rate_limit_pool()
+            if isinstance(settings, RedisRateLimiterSettings) and settings.REDIS_RATE_LIMIT_ENABLED:
+                try:
+                    await create_redis_rate_limit_pool()
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Redis rate limiter not available, continuing without rate limiting: {e}")
 
             if create_tables_on_start:
                 await create_tables()
@@ -115,14 +130,23 @@ def lifespan_factory(
             yield
 
         finally:
-            if isinstance(settings, RedisCacheSettings):
-                await close_redis_cache_pool()
+            if isinstance(settings, RedisCacheSettings) and settings.REDIS_CACHE_ENABLED:
+                try:
+                    await close_redis_cache_pool()
+                except Exception:
+                    pass
 
-            if isinstance(settings, RedisQueueSettings):
-                await close_redis_queue_pool()
+            if isinstance(settings, RedisQueueSettings) and settings.REDIS_QUEUE_ENABLED:
+                try:
+                    await close_redis_queue_pool()
+                except Exception:
+                    pass
 
-            if isinstance(settings, RedisRateLimiterSettings):
-                await close_redis_rate_limit_pool()
+            if isinstance(settings, RedisRateLimiterSettings) and settings.REDIS_RATE_LIMIT_ENABLED:
+                try:
+                    await close_redis_rate_limit_pool()
+                except Exception:
+                    pass
 
     return lifespan
 

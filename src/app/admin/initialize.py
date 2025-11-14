@@ -40,12 +40,9 @@ def create_admin_interface() -> Optional[CRUDAdmin]:
         enforce_https=settings.ENVIRONMENT == EnvironmentOption.PRODUCTION,
         track_events=settings.CRUD_ADMIN_TRACK_EVENTS,
         track_sessions_in_db=settings.CRUD_ADMIN_TRACK_SESSIONS,
-        initial_admin={
-            "username": settings.ADMIN_USERNAME,
-            "password": settings.ADMIN_PASSWORD,
-        }
-        if settings.ADMIN_USERNAME and settings.ADMIN_PASSWORD
-        else None,
+        # Disable initial admin creation - use create_first_superuser script instead
+        # crudadmin expects username field which we removed
+        initial_admin=None,
     )
 
     register_admin_views(admin)

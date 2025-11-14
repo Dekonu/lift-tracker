@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .admin.initialize import create_admin_interface
 from .api import router
@@ -21,13 +22,27 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
     async with default_lifespan(app):
         # Initialize admin interface if it exists
         if admin:
-            # Initialize admin database and setup
-            await admin.initialize()
+            try:
+                # Initialize admin database and setup
+                await admin.initialize()
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Admin interface initialization failed, continuing without admin: {e}")
 
         yield
 
 
 app = create_application(router=router, settings=settings, lifespan=lifespan_with_admin)
+
+# Add CORS middleware for frontend connection
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Mount admin interface if enabled
 if admin:
