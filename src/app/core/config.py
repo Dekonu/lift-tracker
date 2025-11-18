@@ -1,5 +1,7 @@
 import os
+import re
 from enum import Enum
+from urllib.parse import quote_plus, urlparse, urlunparse, parse_qs
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings
@@ -92,10 +94,41 @@ class SupabaseSettings(DatabaseSettings):
     def database_uri(self) -> str:
         """Get database URI, preferring direct URL or constructing from components."""
         if self.POSTGRES_URL:
-            return self.POSTGRES_URL.replace("postgresql://", "").replace("postgresql+asyncpg://", "")
+            # Parse and fix the URL to handle special characters in password
+            url = self.POSTGRES_URL.strip()
+            
+            # Remove protocol if present to get the URI part
+            uri = url
+            if url.startswith("postgresql+asyncpg://"):
+                uri = url.replace("postgresql+asyncpg://", "", 1)
+            elif url.startswith("postgresql://"):
+                uri = url.replace("postgresql://", "", 1)
+            
+            # Parse the URI manually to handle special characters in password
+            # Format: user:password@host:port/database
+            # Use regex to extract components before @ symbol
+            match = re.match(r"^([^:]+):([^@]+)@(.+)$", uri)
+            if match:
+                username, password, rest = match.groups()
+                # URL-encode the password
+                encoded_password = quote_plus(password)
+                # Reconstruct URI with encoded password
+                encoded_uri = f"{username}:{encoded_password}@{rest}"
+                return encoded_uri
+            
+            # If no match (no password or different format), return as-is
+            return uri
         if self.POSTGRES_URI:
             return self.POSTGRES_URI
-        return f"{self.SUPABASE_DB_USER}:{self.SUPABASE_DB_PASSWORD}@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
+        # Check if we have valid Supabase connection details
+        if not self.SUPABASE_DB_HOST:
+            raise ValueError(
+                "Database connection not configured. Please set POSTGRES_URL or SUPABASE_DB_HOST in your .env file. "
+                "See supabase_schema.sql for setup instructions."
+            )
+        # URL-encode password to handle special characters
+        encoded_password = quote_plus(self.SUPABASE_DB_PASSWORD)
+        return f"{self.SUPABASE_DB_USER}:{encoded_password}@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
 
 
 class FirstUserSettings(BaseSettings):

@@ -123,7 +123,13 @@ def lifespan_factory(
                     logger.warning(f"Redis rate limiter not available, continuing without rate limiting: {e}")
 
             if create_tables_on_start:
-                await create_tables()
+                try:
+                    await create_tables()
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to create database tables: {e}")
+                    logger.warning("Continuing without database tables. Make sure your database is configured correctly.")
 
             initialization_complete.set()
 
