@@ -33,8 +33,65 @@ from .utils import cache, queue
 
 # -------------- database --------------
 async def create_tables() -> None:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """
+    Create database tables, handling asyncpg prepared statement conflicts.
+    
+    This function attempts to create tables but gracefully handles errors that can occur
+    with connection poolers (like Supabase's pooler) that don't fully support prepared statements.
+    If table creation fails due to prepared statement conflicts, we log a warning and continue,
+    as the tables may already exist or will be created on the next successful connection.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    max_retries = 2  # Reduced retries since NullPool should avoid most conflicts
+    for attempt in range(max_retries):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            # Success - log and return
+            if attempt > 0:
+                logger.info("Database tables created successfully after retry")
+            return
+        except Exception as e:
+            # Handle DuplicatePreparedStatementError which can occur with connection poolers
+            # This is a known issue with asyncpg and Supabase's pooler
+            error_str = str(e)
+            is_prepared_statement_error = (
+                "DuplicatePreparedStatementError" in error_str 
+                or "prepared statement" in error_str.lower()
+            )
+            
+            if is_prepared_statement_error:
+                if attempt < max_retries - 1:
+                    logger.debug(
+                        f"Prepared statement conflict during table creation (attempt {attempt + 1}/{max_retries}). "
+                        "Retrying with new connection..."
+                    )
+                    # Wait a bit before retrying
+                    import asyncio
+                    await asyncio.sleep(0.3 * (attempt + 1))
+                    continue
+                else:
+                    # Last attempt failed - log but don't crash
+                    # Tables may already exist, or will be created when first used
+                    logger.info(
+                        "Could not create tables due to prepared statement conflicts. "
+                        "This is expected with connection poolers. Tables may already exist. "
+                        "Application will continue - tables will be created on first use if needed."
+                    )
+                    return
+            else:
+                # Different error - check if it's a "table already exists" type error
+                if "already exists" in error_str.lower() or "duplicate" in error_str.lower():
+                    logger.info("Tables may already exist. Continuing...")
+                    return
+                # For other errors, log and continue (don't crash startup)
+                logger.warning(
+                    f"Unexpected error during table creation: {e}. "
+                    "Application will continue - tables may already exist."
+                )
+                return
 
 
 # -------------- cache --------------

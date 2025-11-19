@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from .exercise_instance import ExerciseInstanceRead
 
 
 class WorkoutBase(BaseModel):

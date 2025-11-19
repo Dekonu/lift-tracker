@@ -19,6 +19,12 @@ from ...schemas.exercise_instance import ExerciseInstanceCreate, ExerciseInstanc
 from ...schemas.set import SetCreate, SetRead, SetUpdate
 from ...schemas.workout import WorkoutCreate, WorkoutRead, WorkoutUpdate
 
+# Rebuild models to resolve forward references for Pydantic v2
+# Must rebuild in reverse dependency order (SetRead -> ExerciseInstanceRead -> WorkoutRead)
+SetRead.model_rebuild()
+ExerciseInstanceRead.model_rebuild()
+WorkoutRead.model_rebuild()
+
 router = APIRouter(tags=["workouts"])
 
 
