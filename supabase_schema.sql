@@ -56,20 +56,12 @@ CREATE TABLE IF NOT EXISTS exercise (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     primary_muscle_group_id INTEGER NOT NULL,
+    secondary_muscle_group_ids INTEGER[] DEFAULT '{}',
     FOREIGN KEY (primary_muscle_group_id) REFERENCES muscle_group(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_exercise_name ON exercise(name);
 CREATE INDEX IF NOT EXISTS idx_exercise_primary_muscle_group ON exercise(primary_muscle_group_id);
-
--- Exercise secondary muscle groups (many-to-many relationship)
-CREATE TABLE IF NOT EXISTS exercise_secondary_muscle_groups (
-    exercise_id INTEGER NOT NULL,
-    muscle_group_id INTEGER NOT NULL,
-    PRIMARY KEY (exercise_id, muscle_group_id),
-    FOREIGN KEY (exercise_id) REFERENCES exercise(id) ON DELETE CASCADE,
-    FOREIGN KEY (muscle_group_id) REFERENCES muscle_group(id) ON DELETE CASCADE
-);
 
 -- Workout table
 CREATE TABLE IF NOT EXISTS workout (

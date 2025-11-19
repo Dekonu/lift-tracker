@@ -5,6 +5,7 @@ interface User {
   id: number
   name: string
   email: string
+  is_superuser?: boolean
 }
 
 interface AuthContextType {
@@ -29,7 +30,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fetch current user
       api.get('/v1/user/me/')
         .then(response => {
-          setUser(response.data)
+          const userData = response.data
+          setUser({
+            ...userData,
+            is_superuser: userData.is_superuser || false
+          })
         })
         .catch(() => {
           localStorage.removeItem('access_token')
@@ -57,7 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Fetch user data
     const userResponse = await api.get('/v1/user/me/')
-    setUser(userResponse.data)
+    const userData = userResponse.data
+    // Include is_superuser from the response
+    setUser({
+      ...userData,
+      is_superuser: userData.is_superuser || false
+    })
   }
 
   const signup = async (name: string, email: string, password: string) => {

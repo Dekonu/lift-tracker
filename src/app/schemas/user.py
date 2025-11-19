@@ -25,6 +25,7 @@ class UserRead(BaseModel):
     email: Annotated[EmailStr, Field(examples=["user.userson@example.com"])]
     profile_image_url: str
     tier_id: int | None
+    is_superuser: bool = False
 
 
 class UserCreate(UserBase):

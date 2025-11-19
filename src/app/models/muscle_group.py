@@ -14,10 +14,4 @@ class MuscleGroup(Base):
     primary_exercises: Mapped[list["Exercise"]] = relationship(
         "Exercise", foreign_keys="[Exercise.primary_muscle_group_id]", back_populates="primary_muscle_group", init=False
     )
-    secondary_exercises: Mapped[list["Exercise"]] = relationship(
-        "Exercise",
-        secondary="exercise_secondary_muscle_groups",
-        back_populates="secondary_muscle_groups",
-        init=False,
-    )
 

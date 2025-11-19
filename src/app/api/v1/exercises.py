@@ -27,10 +27,11 @@ async def create_exercise(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ExerciseRead:
     """Create a new exercise."""
-    # Check if exercise name already exists
+    # Name is already converted to camelCase by Pydantic validator
+    # Check if exercise name already exists (case-insensitive check for safety)
     existing = await crud_exercises.exists(db=db, name=exercise.name)
     if existing:
-        raise DuplicateValueException("Exercise with this name already exists")
+        raise DuplicateValueException(f"Exercise with name '{exercise.name}' already exists")
 
     # Validate primary muscle group exists
     primary_mg = await crud_muscle_groups.get(db=db, id=exercise.primary_muscle_group_id)
@@ -60,23 +61,10 @@ async def read_exercises(
         db=db,
         offset=compute_offset(page, items_per_page),
         limit=items_per_page,
+        schema_to_select=ExerciseRead,
     )
 
-    # For each exercise, add secondary muscle group IDs
-    exercises = exercises_data.get("data", [])
-    for exercise in exercises:
-        if isinstance(exercise, dict):
-            exercise_id = exercise.get("id")
-        else:
-            exercise_id = exercise.id
-        exercise_with_mg = await get_exercise_with_muscle_groups(db=db, exercise_id=exercise_id)
-        if exercise_with_mg:
-            secondary_ids = exercise_with_mg.secondary_muscle_group_ids
-            if isinstance(exercise, dict):
-                exercise["secondary_muscle_group_ids"] = secondary_ids
-            else:
-                exercise.secondary_muscle_group_ids = secondary_ids
-
+    # Secondary muscle group IDs are now stored directly in the exercise model
     response: dict[str, Any] = paginated_response(crud_data=exercises_data, page=page, items_per_page=items_per_page)
     return response
 
@@ -109,6 +97,7 @@ async def update_exercise(
         raise NotFoundException("Exercise not found")
 
     # Check if new name conflicts
+    # Name is already converted to camelCase by Pydantic validator
     if values.name is not None:
         name_exists = await crud_exercises.exists(db=db, name=values.name)
         if name_exists:
@@ -122,7 +111,7 @@ async def update_exercise(
             else:
                 existing_name_id = existing_with_name.id
             if existing_name_id != existing_id:
-                raise DuplicateValueException("Exercise with this name already exists")
+                raise DuplicateValueException(f"Exercise with name '{values.name}' already exists")
 
     # Validate primary muscle group if provided
     if values.primary_muscle_group_id is not None:

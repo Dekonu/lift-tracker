@@ -27,9 +27,9 @@ export default function Signup() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: '400px', marginTop: '100px' }}>
+    <div className="container" style={{ maxWidth: '450px', marginTop: '80px' }}>
       <div className="card">
-        <h1 style={{ marginBottom: '20px', textAlign: 'center' }}>Sign Up</h1>
+        <h1 style={{ marginBottom: '24px', textAlign: 'center' }}>Sign Up</h1>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Name</label>
@@ -66,7 +66,7 @@ export default function Signup() {
             {loading ? 'Signing up...' : 'Sign Up'}
           </button>
         </form>
-        <p style={{ marginTop: '20px', textAlign: 'center' }}>
+        <p style={{ marginTop: '24px', textAlign: 'center' }}>
           Already have an account? <Link to="/login">Login</Link>
         </p>
       </div>

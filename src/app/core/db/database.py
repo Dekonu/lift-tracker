@@ -1,4 +1,7 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from typing import Any, TypeVar
+import asyncio
+import logging
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncEngine
 from sqlalchemy.ext.asyncio.session import AsyncSession
@@ -6,6 +9,9 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase, MappedAsDataclass
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
+T = TypeVar('T')
 
 
 class Base(DeclarativeBase, MappedAsDataclass):
@@ -54,11 +60,17 @@ async_engine: AsyncEngine = create_async_engine(
         # Disable prepared statement cache to avoid DuplicatePreparedStatementError
         # This prevents asyncpg from caching prepared statements which conflict with poolers
         "statement_cache_size": 0,
+        "command_timeout": 60,
     },
     # Use NullPool to avoid prepared statement conflicts with Supabase's pooler
     # This creates a new connection for each request, avoiding prepared statement caching issues
     poolclass=NullPool,
+    pool_pre_ping=True,
 )
+
+# Note: The statement_cache_size=0 in connect_args should disable prepared statements
+# However, if errors still occur, they will be caught and retried in the setup.py retry logic
+# For runtime errors, we rely on NullPool creating fresh connections for each request
 
 local_session = async_sessionmaker(bind=async_engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -66,3 +78,38 @@ local_session = async_sessionmaker(bind=async_engine, class_=AsyncSession, expir
 async def async_get_db() -> AsyncGenerator[AsyncSession, None]:
     async with local_session() as db:
         yield db
+
+
+async def retry_on_prepared_statement_error(
+    func: Callable[..., Any], 
+    max_retries: int = 3,
+    *args: Any,
+    **kwargs: Any
+) -> Any:
+    """
+    Retry a database operation if it encounters DuplicatePreparedStatementError.
+    
+    This is a workaround for Supabase's connection pooler which doesn't fully support
+    prepared statements. When this error occurs, we retry with a fresh connection.
+    """
+    for attempt in range(max_retries):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            error_str = str(e)
+            is_prepared_statement_error = (
+                "DuplicatePreparedStatementError" in error_str 
+                or "prepared statement" in error_str.lower()
+            )
+            
+            if is_prepared_statement_error and attempt < max_retries - 1:
+                wait_time = 0.1 * (attempt + 1)
+                logger.debug(
+                    f"Prepared statement error (attempt {attempt + 1}/{max_retries}). "
+                    f"Retrying in {wait_time}s..."
+                )
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                # Either not a prepared statement error, or we've exhausted retries
+                raise

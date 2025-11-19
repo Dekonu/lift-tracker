@@ -61,34 +61,46 @@ export default function Home() {
 
   return (
     <div className="container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '16px' }}>
         <h1>Welcome, {user?.name}!</h1>
-        <button className="btn btn-secondary" onClick={logout}>
-          Logout
-        </button>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          {user?.is_superuser && (
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => navigate('/admin')}
+            >
+              Admin Dashboard
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={logout}>
+            Logout
+          </button>
+        </div>
       </div>
 
       {loading ? (
-        <div>Loading workouts...</div>
+        <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="loading">Loading workouts...</div>
+        </div>
       ) : error ? (
         <div className="error">{error}</div>
       ) : workouts.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '60px 40px' }}>
           <h2 style={{ marginBottom: '20px' }}>No workouts recorded</h2>
-          <p style={{ marginBottom: '30px', color: '#666' }}>
+          <p style={{ marginBottom: '30px' }}>
             Start tracking your workouts by creating your first one!
           </p>
           <button 
             className="btn btn-primary" 
             onClick={() => navigate('/workout/create')}
-            style={{ fontSize: '18px', padding: '12px 30px' }}
+            style={{ fontSize: '18px', padding: '14px 32px' }}
           >
             Create Workout
           </button>
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
             <h2>Your Workouts</h2>
             <button 
               className="btn btn-primary" 
@@ -99,19 +111,38 @@ export default function Home() {
           </div>
           {workouts.map((workout) => (
             <div key={workout.id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <h3>{formatDate(workout.date)}</h3>
               </div>
               {workout.exercise_instances && workout.exercise_instances.length > 0 ? (
                 <div>
-                  <p style={{ marginBottom: '10px', fontWeight: '500' }}>
+                  <p style={{ marginBottom: '16px', fontWeight: '600', fontSize: '16px' }}>
                     {workout.exercise_instances.length} exercise{workout.exercise_instances.length !== 1 ? 's' : ''}
                   </p>
                   {workout.exercise_instances.map((instance) => (
-                    <div key={instance.id} style={{ marginBottom: '15px', padding: '10px', background: '#f9f9f9', borderRadius: '5px' }}>
-                      <p style={{ fontWeight: '500' }}>Exercise #{instance.order}</p>
+                    <div 
+                      key={instance.id} 
+                      style={{ 
+                        marginBottom: '12px', 
+                        padding: '16px', 
+                        background: 'linear-gradient(135deg, rgba(230, 213, 247, 0.15) 0%, rgba(168, 230, 207, 0.15) 100%)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(230, 213, 247, 0.3)',
+                        transition: 'all 0.3s ease',
+                        color: '#1A1A1A'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateX(4px)'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(230, 213, 247, 0.2)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateX(0)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      <p style={{ fontWeight: '600', marginBottom: '4px' }}>Exercise #{instance.order}</p>
                       {instance.sets && instance.sets.length > 0 && (
-                        <p style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>
+                        <p style={{ fontSize: '14px', marginTop: '4px' }}>
                           {instance.sets.length} set{instance.sets.length !== 1 ? 's' : ''}
                         </p>
                       )}
@@ -119,7 +150,7 @@ export default function Home() {
                   ))}
                 </div>
               ) : (
-                <p style={{ color: '#666' }}>No exercises in this workout</p>
+                <p>No exercises in this workout</p>
               )}
             </div>
           ))}
