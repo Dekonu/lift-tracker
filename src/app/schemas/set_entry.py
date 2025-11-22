@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SetEntryBase(BaseModel):
@@ -38,4 +38,6 @@ class SetEntryRead(SetEntryBase):
     id: int
     exercise_entry_id: int
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 

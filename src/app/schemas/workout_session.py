@@ -19,7 +19,7 @@ class WorkoutSessionBase(BaseModel):
 
 
 class WorkoutSessionCreate(WorkoutSessionBase):
-    user_id: int
+    user_id: int | None = None  # Optional - will be set from current_user if not provided
 
 
 class WorkoutSessionUpdate(BaseModel):
@@ -40,5 +40,5 @@ class WorkoutSessionRead(WorkoutSessionBase):
     updated_at: datetime | None
     exercise_entries: list["ExerciseEntryRead"] = []
 
-    model_config = {"arbitrary_types_allowed": True}
+    model_config = ConfigDict(arbitrary_types_allowed=True, from_attributes=True)
 

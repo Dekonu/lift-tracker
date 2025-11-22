@@ -107,7 +107,6 @@ export default function CreateWorkout() {
     try {
       // Create workout session with selected date
       const sessionResponse = await api.post('/v1/workout-session', {
-        user_id: 0, // Will be set by backend from current_user
         started_at: workoutDate.toISOString(),
         name: null // Will be auto-generated
       })

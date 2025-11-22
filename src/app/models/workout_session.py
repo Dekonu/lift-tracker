@@ -12,12 +12,12 @@ class WorkoutSession(Base):
 
     id: Mapped[int] = mapped_column(autoincrement=True, primary_key=True, init=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False, index=True)
-    name: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     
     # Session metadata (fields without defaults first)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     
     # Fields with defaults last
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     workout_template_id: Mapped[int | None] = mapped_column(ForeignKey("workout_template.id"), nullable=True, default=None, index=True)
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True, default=None)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)

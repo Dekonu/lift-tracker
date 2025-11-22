@@ -30,5 +30,5 @@ class ExerciseEntryRead(ExerciseEntryBase):
     created_at: datetime
     sets: list["SetEntryRead"] = []
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, from_attributes=True)
 

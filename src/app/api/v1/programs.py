@@ -169,11 +169,13 @@ async def add_week_to_program(
     if program_user_id != current_user["id"]:
         raise NotFoundException("Cannot modify program owned by another user")
     
-    # Set program_id
-    week_data = week.model_dump()
-    week_data["program_id"] = program_id
+    # Set program_id and create Pydantic model
+    from ...schemas.program_week import ProgramWeekCreate
+    week_dict = week.model_dump()
+    week_dict["program_id"] = program_id
+    week_internal = ProgramWeekCreate(**week_dict)
     
-    created = await crud_program_week.create(db=db, object=week_data)
+    created = await crud_program_week.create(db=db, object=week_internal)
     await db.commit()
     
     return ProgramWeekRead(**created) if isinstance(created, dict) else ProgramWeekRead.model_validate(created)

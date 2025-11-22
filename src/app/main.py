@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from .admin.initialize import create_admin_interface
 from .api import router
@@ -34,6 +35,9 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 app = create_application(router=router, settings=settings, lifespan=lifespan_with_admin)
+
+# Add compression middleware (should be first to compress responses)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Add CORS middleware for frontend connection
 app.add_middleware(

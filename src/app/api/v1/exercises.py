@@ -6,8 +6,9 @@ import httpx
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from fastcrud.paginated import PaginatedListResponse, compute_offset, paginated_response
-from sqlalchemy import exc as sqlalchemy_exc
+from sqlalchemy import exc as sqlalchemy_exc, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ...api.dependencies import get_current_user, get_optional_user
 from ...core.db.database import async_get_db
@@ -117,46 +118,83 @@ async def read_exercises(
     if not is_admin:
         filters["enabled"] = True
     
-    # Filter by equipment if specified (requires fetching all and filtering)
+    # Optimize equipment filtering with SQL JOIN
     if equipment_ids:
+        from ...models.exercise import Exercise
+        from ...models.exercise_equipment import ExerciseEquipment
+        
         equipment_id_list = [int(eq_id.strip()) for eq_id in equipment_ids.split(",") if eq_id.strip()]
         
-        # Need to get all exercises to filter by equipment (unfortunately)
-        # TODO: Optimize with SQL JOIN query for better performance
-        all_exercises_data = await crud_exercises.get_multi(
-            db=db,
-            offset=0,
-            limit=10000,
-            schema_to_select=ExerciseRead,
-            return_total_count=True,
-            **filters,
+        # Use SQL JOIN to find exercises that have ALL required equipment
+        # This is much faster than fetching all and filtering in Python
+        stmt = (
+            select(Exercise)
+            .join(ExerciseEquipment, Exercise.id == ExerciseEquipment.exercise_id)
+            .where(ExerciseEquipment.equipment_id.in_(equipment_id_list))
+            .group_by(Exercise.id)
+            .having(func.count(ExerciseEquipment.equipment_id.distinct()) == len(equipment_id_list))
         )
-        all_exercises = all_exercises_data.get("data", [])
         
-        # Get equipment links for all exercises and filter
-        filtered_exercises = []
-        for exercise in all_exercises:
-            exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
-            equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
-            exercise_equipment_ids = {
-                link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"]
-                for link in equipment_links
-            }
-            
-            # Check if exercise has ALL required equipment (AND relationship)
-            if all(eq_id in exercise_equipment_ids for eq_id in equipment_id_list):
-                # Add equipment_ids to exercise
-                if isinstance(exercise, dict):
-                    exercise["equipment_ids"] = list(exercise_equipment_ids)
-                else:
-                    exercise.equipment_ids = list(exercise_equipment_ids)
-                filtered_exercises.append(exercise)
+        # Add enabled filter if not admin
+        if not is_admin:
+            stmt = stmt.where(Exercise.enabled == True)
         
-        # Paginate filtered results
-        total_count = len(filtered_exercises)
+        result = await db.execute(stmt)
+        exercise_models = result.scalars().all()
+        
+        # Get total count
+        count_subquery = (
+            select(Exercise.id)
+            .join(ExerciseEquipment, Exercise.id == ExerciseEquipment.exercise_id)
+            .where(ExerciseEquipment.equipment_id.in_(equipment_id_list))
+            .group_by(Exercise.id)
+            .having(func.count(ExerciseEquipment.equipment_id.distinct()) == len(equipment_id_list))
+        )
+        if not is_admin:
+            count_subquery = count_subquery.where(Exercise.enabled == True)
+        
+        count_stmt = select(func.count()).select_from(count_subquery.subquery())
+        count_result = await db.execute(count_stmt)
+        total_count = count_result.scalar() or 0
+        
+        # Paginate
         start = compute_offset(page, items_per_page)
-        end = start + items_per_page
-        exercises = filtered_exercises[start:end]
+        paginated_exercises = exercise_models[start:start + items_per_page]
+        
+        # Convert to schema and fetch equipment IDs in batch
+        exercise_ids = [ex.id for ex in paginated_exercises]
+        if exercise_ids:
+            # Batch fetch all equipment links for this page
+            equipment_links_stmt = select(ExerciseEquipment).where(
+                ExerciseEquipment.exercise_id.in_(exercise_ids)
+            )
+            equipment_result = await db.execute(equipment_links_stmt)
+            all_equipment_links = equipment_result.scalars().all()
+            
+            # Group equipment by exercise_id
+            equipment_by_exercise: dict[int, list[int]] = {}
+            for link in all_equipment_links:
+                if link.exercise_id not in equipment_by_exercise:
+                    equipment_by_exercise[link.exercise_id] = []
+                equipment_by_exercise[link.exercise_id].append(link.equipment_id)
+        else:
+            equipment_by_exercise = {}
+        
+        # Convert to ExerciseRead schema
+        exercises = []
+        for ex in paginated_exercises:
+            ex_dict = {
+                "id": ex.id,
+                "name": ex.name,
+                "primary_muscle_group_ids": ex.primary_muscle_group_ids or [],
+                "secondary_muscle_group_ids": ex.secondary_muscle_group_ids or [],
+                "enabled": ex.enabled,
+                "category_id": ex.category_id,
+                "instructions": ex.instructions,
+                "common_mistakes": ex.common_mistakes,
+                "equipment_ids": equipment_by_exercise.get(ex.id, []),
+            }
+            exercises.append(ExerciseRead(**ex_dict))
     else:
         # Get exercises with pagination (normal case - much faster)
         exercises_data = await crud_exercises.get_multi(
@@ -171,18 +209,37 @@ async def read_exercises(
         exercises = exercises_data.get("data", [])
         total_count = exercises_data.get("total_count", 0)
         
-        # Add equipment_ids to exercises (only for current page)
-        for exercise in exercises:
-            exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
-            equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
-            equipment_ids_list = [
-                link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"]
-                for link in equipment_links
+        # Batch fetch equipment_ids for all exercises on this page
+        if exercises:
+            from ...models.exercise_equipment import ExerciseEquipment
+            
+            exercise_ids = [
+                ex.id if hasattr(ex, "id") else ex["id"] 
+                for ex in exercises
             ]
-            if isinstance(exercise, dict):
-                exercise["equipment_ids"] = equipment_ids_list
-            else:
-                exercise.equipment_ids = equipment_ids_list
+            
+            # Single query to get all equipment links for this page
+            equipment_links_stmt = select(ExerciseEquipment).where(
+                ExerciseEquipment.exercise_id.in_(exercise_ids)
+            )
+            equipment_result = await db.execute(equipment_links_stmt)
+            all_equipment_links = equipment_result.scalars().all()
+            
+            # Group equipment by exercise_id
+            equipment_by_exercise: dict[int, list[int]] = {}
+            for link in all_equipment_links:
+                if link.exercise_id not in equipment_by_exercise:
+                    equipment_by_exercise[link.exercise_id] = []
+                equipment_by_exercise[link.exercise_id].append(link.equipment_id)
+            
+            # Add equipment_ids to exercises
+            for exercise in exercises:
+                exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
+                equipment_ids_list = equipment_by_exercise.get(exercise_id, [])
+                if isinstance(exercise, dict):
+                    exercise["equipment_ids"] = equipment_ids_list
+                else:
+                    exercise.equipment_ids = equipment_ids_list
     
     # Calculate has_more
     has_more = (page * items_per_page) < total_count

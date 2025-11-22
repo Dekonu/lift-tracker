@@ -36,28 +36,66 @@ async def create_workout_session(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutSessionRead:
     """Create a new workout session."""
-    # Ensure user_id matches current user
-    if session.user_id != current_user["id"]:
-        raise NotFoundException("Cannot create session for another user")
+    # Set user_id from current_user (ignore any user_id in request for security)
+    session_dict = session.model_dump(exclude={"user_id"})
+    session_dict["user_id"] = current_user["id"]
     
     # Auto-generate name if not provided
-    session_data = session.model_dump()
-    if not session_data.get("name"):
+    if not session_dict.get("name"):
         from datetime import datetime
-        started_at = session_data.get("started_at")
+        started_at = session_dict.get("started_at")
         if isinstance(started_at, str):
             started_at = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
         elif isinstance(started_at, datetime):
             pass
         else:
             started_at = datetime.now()
-        session_data["name"] = f"Workout {started_at.strftime('%Y-%m-%d %H:%M')}"
+        session_dict["name"] = f"Workout {started_at.strftime('%Y-%m-%d %H:%M')}"
     
-    created = await crud_workout_session.create(db=db, object=session_data)
+    # Create Pydantic model instance for FastCRUD
+    from ...schemas.workout_session import WorkoutSessionCreate
+    session_internal = WorkoutSessionCreate(**session_dict)
+    created = await crud_workout_session.create(db=db, object=session_internal)
     await db.commit()
     await db.refresh(created)
     
-    return WorkoutSessionRead(**created) if isinstance(created, dict) else WorkoutSessionRead.model_validate(created)
+    # Fetch with schema to get proper Pydantic model
+    # Use return_as_model=True to get a Pydantic model directly
+    session_read = await crud_workout_session.get(
+        db=db, 
+        id=created.id, 
+        schema_to_select=WorkoutSessionRead,
+        return_as_model=True
+    )
+    if session_read is None:
+        raise NotFoundException("Created workout session not found")
+    
+    # If it's already a Pydantic model, return it; otherwise convert manually
+    # to avoid accessing relationships (which would trigger lazy loading)
+    if isinstance(session_read, dict):
+        return WorkoutSessionRead(**session_read)
+    elif hasattr(session_read, "model_dump"):
+        # Already a Pydantic model
+        return session_read
+    else:
+        # SQLAlchemy model - convert manually, excluding relationships
+        # to avoid lazy loading issues
+        session_dict = {
+            "id": session_read.id,
+            "user_id": session_read.user_id,
+            "name": session_read.name,
+            "notes": session_read.notes,
+            "started_at": session_read.started_at,
+            "completed_at": session_read.completed_at,
+            "duration_minutes": session_read.duration_minutes,
+            "workout_template_id": session_read.workout_template_id,
+            "total_volume_kg": session_read.total_volume_kg,
+            "total_sets": session_read.total_sets,
+            "created_at": session_read.created_at,
+            "updated_at": session_read.updated_at,
+            "exercise_entries": []  # Empty list, entries will be loaded separately if needed
+        }
+        return WorkoutSessionRead(**session_dict)
 
 
 @router.get("/workout-sessions", response_model=PaginatedListResponse[WorkoutSessionRead])
@@ -282,14 +320,47 @@ async def add_exercise_to_session(
     if exercise is None:
         raise NotFoundException("Exercise not found")
     
-    # Set workout_session_id
-    entry_data = entry.model_dump()
-    entry_data["workout_session_id"] = session_id
+    # Set workout_session_id and create Pydantic model
+    from ...schemas.exercise_entry import ExerciseEntryCreate
+    entry_dict = entry.model_dump()
+    entry_dict["workout_session_id"] = session_id
+    entry_internal = ExerciseEntryCreate(**entry_dict)
     
-    created = await crud_exercise_entry.create(db=db, object=entry_data)
+    created = await crud_exercise_entry.create(db=db, object=entry_internal)
     await db.commit()
+    await db.refresh(created)
     
-    return ExerciseEntryRead(**created) if isinstance(created, dict) else ExerciseEntryRead.model_validate(created)
+    # Fetch with schema to get proper Pydantic model
+    # Use return_as_model=True to get a Pydantic model directly
+    entry_read = await crud_exercise_entry.get(
+        db=db, 
+        id=created.id, 
+        schema_to_select=ExerciseEntryRead,
+        return_as_model=True
+    )
+    if entry_read is None:
+        raise NotFoundException("Created exercise entry not found")
+    
+    # If it's already a Pydantic model, return it; otherwise convert manually
+    # to avoid accessing relationships (which would trigger lazy loading)
+    if isinstance(entry_read, dict):
+        return ExerciseEntryRead(**entry_read)
+    elif hasattr(entry_read, "model_dump"):
+        # Already a Pydantic model
+        return entry_read
+    else:
+        # SQLAlchemy model - convert manually, excluding relationships
+        # to avoid lazy loading issues
+        entry_dict = {
+            "id": entry_read.id,
+            "workout_session_id": entry_read.workout_session_id,
+            "exercise_id": entry_read.exercise_id,
+            "order": entry_read.order,
+            "notes": entry_read.notes,
+            "created_at": entry_read.created_at,
+            "sets": []  # Empty list, sets will be loaded separately if needed
+        }
+        return ExerciseEntryRead(**entry_dict)
 
 
 @router.get("/workout-session/{session_id}/exercise-entries", response_model=PaginatedListResponse[ExerciseEntryRead])
@@ -337,14 +408,51 @@ async def add_set_to_entry(
     if session is None:
         raise NotFoundException("Exercise entry not found or access denied")
     
-    # Set exercise_entry_id
-    set_data = set_entry.model_dump()
-    set_data["exercise_entry_id"] = entry_id
+    # Set exercise_entry_id and create Pydantic model
+    from ...schemas.set_entry import SetEntryCreate
+    set_dict = set_entry.model_dump()
+    set_dict["exercise_entry_id"] = entry_id
+    set_internal = SetEntryCreate(**set_dict)
     
-    created = await crud_set_entry.create(db=db, object=set_data)
+    created = await crud_set_entry.create(db=db, object=set_internal)
     await db.commit()
+    await db.refresh(created)
     
-    return SetEntryRead(**created) if isinstance(created, dict) else SetEntryRead.model_validate(created)
+    # Fetch with schema to get proper Pydantic model
+    # Use return_as_model=True to get a Pydantic model directly
+    set_read = await crud_set_entry.get(
+        db=db, 
+        id=created.id, 
+        schema_to_select=SetEntryRead,
+        return_as_model=True
+    )
+    if set_read is None:
+        raise NotFoundException("Created set entry not found")
+    
+    # If it's already a Pydantic model, return it; otherwise convert
+    if isinstance(set_read, dict):
+        return SetEntryRead(**set_read)
+    elif hasattr(set_read, "model_dump"):
+        # Already a Pydantic model
+        return set_read
+    else:
+        # SQLAlchemy model - convert manually to avoid any relationship issues
+        set_dict = {
+            "id": set_read.id,
+            "exercise_entry_id": set_read.exercise_entry_id,
+            "set_number": set_read.set_number,
+            "weight_kg": set_read.weight_kg,
+            "reps": set_read.reps,
+            "rir": set_read.rir,
+            "rpe": set_read.rpe,
+            "percentage_of_1rm": set_read.percentage_of_1rm,
+            "rest_seconds": set_read.rest_seconds,
+            "tempo": set_read.tempo,
+            "notes": set_read.notes,
+            "is_warmup": set_read.is_warmup,
+            "created_at": set_read.created_at
+        }
+        return SetEntryRead(**set_dict)
 
 
 @router.get("/exercise-entry/{entry_id}/sets", response_model=PaginatedListResponse[SetEntryRead])

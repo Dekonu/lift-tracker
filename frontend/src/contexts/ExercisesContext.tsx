@@ -27,8 +27,9 @@ export function ExercisesProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true)
       setError(null)
-      // Fetch all exercises (increased limit)
-      const response = await api.get('/v1/exercises?page=1&items_per_page=10000')
+      // Fetch exercises with pagination - get first 500 for initial load
+      // Users can search/filter to find specific exercises
+      const response = await api.get('/v1/exercises?page=1&items_per_page=500')
       const exercisesData = response.data.data || []
       setExercises(exercisesData)
       
