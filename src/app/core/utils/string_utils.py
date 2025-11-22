@@ -74,3 +74,34 @@ def validate_exercise_name(name: str) -> str:
     
     return camel_name
 
+
+def validate_exercise_name_preserve_format(name: str) -> str:
+    """
+    Validate exercise name while preserving original formatting (spaces and case).
+    
+    Args:
+        name: The exercise name to validate
+        
+    Returns:
+        The validated name with original formatting preserved
+        
+    Raises:
+        ValueError: If the name is invalid
+    """
+    if not name or not name.strip():
+        raise ValueError("Exercise name cannot be empty")
+    
+    # Check for valid characters (letters, numbers, spaces, hyphens, and underscores)
+    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', name):
+        raise ValueError("Exercise name can only contain letters, numbers, spaces, hyphens, and underscores")
+    
+    # Validate length
+    trimmed_name = name.strip()
+    if len(trimmed_name) > 100:
+        raise ValueError("Exercise name cannot exceed 100 characters")
+    
+    if len(trimmed_name) < 1:
+        raise ValueError("Exercise name must be at least 1 character")
+    
+    # Return the trimmed name (preserve case and spaces)
+    return trimmed_name

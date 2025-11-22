@@ -19,30 +19,51 @@
   <a href="https://docs.docker.com/compose/">
       <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff&style=for-the-badge" alt="Docker">
   </a>
+  <a href="https://wger.de/api/v2/">
+      <img src="https://img.shields.io/badge/Wger_API-4CAF50?style=for-the-badge&logo=api&logoColor=white" alt="Wger API">
+  </a>
 </p>
 
 ---
 
 ## 📖 About
 
-**Lift Tracker** is a multi-user workout tracking application that allows users to log and manage their training sessions. The API provides comprehensive tracking of workouts, exercises, sets, and muscle groups with support for various weight measurement systems.
+**Lift Tracker** is a comprehensive exercise and workout tracking application that enables users to create detailed training sessions by combining exercises and sets. The application integrates with the [Wger API](https://wger.de/api/v2/) to provide an extensive exercise database, making it easy to build and track personalized workout routines.
 
 ### Key Features
 
-- 🏋️ **Workout Management**: Create and track workouts with date/time
-- 💪 **Exercise Library**: Manage exercises with primary and secondary muscle groups
-- 📊 **Set Tracking**: Log sets with weight (percentage of 1RM or static), units (lbs/kg), rest time, RIR (Reps in Reserve), and notes
-- 👥 **Multi-User Support**: Secure authentication with JWT tokens
-- 🔐 **User Authentication**: JWT-based authentication with refresh tokens
-- 📈 **Comprehensive Data**: Track all aspects of your training sessions
+- 🏋️ **Workout Creation**: Build custom workouts by stitching together exercises and sets with full control over order and structure
+- 💪 **Exercise Library**: Access a comprehensive exercise database powered by the Wger API, with automatic synchronization of exercises and muscle groups
+- 🔄 **Wger Integration**: Sync exercises from Wger API with support for both full sync (truncate and reload) and partial sync (change data capture)
+- 📊 **Detailed Set Tracking**: Log sets with weight (percentage of 1RM or static values), units (lbs/kg), rest time, RIR (Reps in Reserve), and custom notes
+- 🎯 **Muscle Group Mapping**: Exercises include primary and secondary muscle groups for better workout planning and analysis
+- 👥 **Multi-User Support**: Secure authentication with JWT tokens, allowing multiple users to track their individual workouts
+- 📥 **Import/Export**: Import exercises from CSV files or export your exercise library for backup and sharing
+- 🔐 **Admin Dashboard**: Full-featured admin interface for managing exercises, muscle groups, and syncing with Wger API
+
+### How It Works
+
+1. **Exercise Database**: The application uses the Wger API to populate a comprehensive exercise library. Administrators can sync exercises from Wger, which automatically creates muscle groups and maps exercises to their primary and secondary muscle targets.
+
+2. **Workout Creation**: Users create workouts by:
+   - Selecting exercises from the library
+   - Adding exercise instances to their workout in a specific order
+   - Adding multiple sets to each exercise instance with detailed tracking data
+
+3. **Set Tracking**: Each set can include:
+   - Weight (static value or percentage of 1RM)
+   - Unit of measurement (lbs or kg)
+   - Rest time between sets
+   - RIR (Reps in Reserve) for intensity tracking
+   - Custom notes for each set
 
 ### Data Model
 
 - **Workouts**: User workouts with date and time
-- **Exercises**: Exercise library with name, primary muscle group, and secondary muscle groups
-- **Exercise Instances**: Exercises within a workout (with ordering)
+- **Exercises**: Exercise library with name, primary muscle group, and secondary muscle groups (synced from Wger API)
+- **Exercise Instances**: Exercises within a workout (with ordering to maintain workout structure)
 - **Sets**: Individual sets with weight, unit, rest time, RIR, and notes
-- **Muscle Groups**: Categorization system for exercises
+- **Muscle Groups**: Categorization system for exercises (automatically created from Wger API)
 
 ---
 
@@ -187,6 +208,9 @@ uv run uvicorn src.app.main:app --reload
 - `POST /api/v1/exercise` - Create exercise
 - `PATCH /api/v1/exercise/{id}` - Update exercise
 - `DELETE /api/v1/exercise/{id}` - Delete exercise
+- `POST /api/v1/exercises/sync-wger` - Sync exercises from Wger API (supports `full_sync` query parameter)
+- `GET /api/v1/exercises/export` - Export all exercises as CSV
+- `POST /api/v1/exercises/import` - Import exercises from CSV file with change data capture
 
 ### Workouts
 
@@ -301,6 +325,18 @@ The API uses JWT tokens for authentication:
 
 ## 📝 Usage Examples
 
+### Sync Exercises from Wger API
+
+```bash
+# Partial sync (change data capture - only updates new/changed exercises)
+curl -X POST "http://localhost:8000/api/v1/exercises/sync-wger?full_sync=false" \
+  -H "Authorization: Bearer <your-token>"
+
+# Full sync (truncates all exercises and reloads from Wger)
+curl -X POST "http://localhost:8000/api/v1/exercises/sync-wger?full_sync=true" \
+  -H "Authorization: Bearer <your-token>"
+```
+
 ### Create a Workout
 
 ```bash
@@ -312,9 +348,10 @@ curl -X POST "http://localhost:8000/api/v1/workout" \
   }'
 ```
 
-### Add an Exercise to a Workout
+### Build a Workout: Add Exercises and Sets
 
 ```bash
+# Step 1: Add an exercise to the workout (creates an exercise instance)
 curl -X POST "http://localhost:8000/api/v1/workout/1/exercise-instance" \
   -H "Authorization: Bearer <your-token>" \
   -H "Content-Type: application/json" \
@@ -322,11 +359,8 @@ curl -X POST "http://localhost:8000/api/v1/workout/1/exercise-instance" \
     "exercise_id": 1,
     "order": 0
   }'
-```
 
-### Add a Set
-
-```bash
+# Step 2: Add sets to the exercise instance
 curl -X POST "http://localhost:8000/api/v1/exercise-instance/1/set" \
   -H "Authorization: Bearer <your-token>" \
   -H "Content-Type: application/json" \
@@ -338,6 +372,22 @@ curl -X POST "http://localhost:8000/api/v1/exercise-instance/1/set" \
     "rir": 2,
     "notes": "Felt strong today"
   }'
+
+# Repeat steps 1-2 to build your complete workout with multiple exercises and sets
+```
+
+### Export/Import Exercises
+
+```bash
+# Export exercises to CSV
+curl -X GET "http://localhost:8000/api/v1/exercises/export" \
+  -H "Authorization: Bearer <your-token>" \
+  --output exercises.csv
+
+# Import exercises from CSV (with change data capture)
+curl -X POST "http://localhost:8000/api/v1/exercises/import" \
+  -H "Authorization: Bearer <your-token>" \
+  -F "file=@exercises.csv"
 ```
 
 ---

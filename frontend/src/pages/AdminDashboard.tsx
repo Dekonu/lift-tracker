@@ -11,8 +11,9 @@ interface MuscleGroup {
 interface Exercise {
   id: number
   name: string
-  primary_muscle_group_id: number
+  primary_muscle_group_ids: number[]
   secondary_muscle_group_ids: number[]
+  enabled: boolean
 }
 
 export default function AdminDashboard() {
@@ -29,13 +30,25 @@ export default function AdminDashboard() {
   const [creatingMuscleGroup, setCreatingMuscleGroup] = useState(false)
   const [muscleGroupError, setMuscleGroupError] = useState('')
   const [muscleGroupModalContext, setMuscleGroupModalContext] = useState<'primary' | 'secondary'>('primary')
+  const [primaryDropdownValue, setPrimaryDropdownValue] = useState('')
   const [secondaryDropdownValue, setSecondaryDropdownValue] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{created: number, updated: number, skipped: number, errors: string[]} | null>(null)
+  const [wgerSyncMode, setWgerSyncMode] = useState<'partial' | 'full'>('partial')
+  const [wgerSyncing, setWgerSyncing] = useState(false)
+  const [wgerSyncResult, setWgerSyncResult] = useState<{created: number, updated: number, skipped: number, muscle_groups_created: number, errors: string[]} | null>(null)
+  
+  // Filter state
+  const [filterName, setFilterName] = useState('')
+  const [filterMuscleGroup, setFilterMuscleGroup] = useState<number | ''>('')
+  const [filterEnabled, setFilterEnabled] = useState<'all' | 'enabled' | 'disabled'>('all')
   
   // Form state
   const [formData, setFormData] = useState({
     name: '',
-    primary_muscle_group_id: '',
-    secondary_muscle_group_ids: [] as number[]
+    primary_muscle_group_ids: [] as number[],
+    secondary_muscle_group_ids: [] as number[],
+    enabled: true
   })
 
   useEffect(() => {
@@ -50,6 +63,7 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      setError('') // Clear any previous errors on successful refresh
       const [exercisesRes, muscleGroupsRes] = await Promise.all([
         api.get('/v1/exercises?page=1&items_per_page=100'),
         api.get('/v1/muscle-groups?page=1&items_per_page=100')
@@ -70,8 +84,9 @@ export default function AdminDashboard() {
     try {
       const payload = {
         name: formData.name,
-        primary_muscle_group_id: parseInt(formData.primary_muscle_group_id),
-        secondary_muscle_group_ids: formData.secondary_muscle_group_ids
+        primary_muscle_group_ids: formData.primary_muscle_group_ids,
+        secondary_muscle_group_ids: formData.secondary_muscle_group_ids,
+        enabled: formData.enabled
       }
 
       if (editingExercise) {
@@ -81,9 +96,11 @@ export default function AdminDashboard() {
       }
 
       // Reset form and refresh data
-      setFormData({ name: '', primary_muscle_group_id: '', secondary_muscle_group_ids: [] })
+      setFormData({ name: '', primary_muscle_group_ids: [], secondary_muscle_group_ids: [], enabled: true })
       setShowAddForm(false)
       setEditingExercise(null)
+      setPrimaryDropdownValue('')
+      setSecondaryDropdownValue('')
       await fetchData()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save exercise')
@@ -103,13 +120,56 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleToggleEnabled = async (exercise: Exercise) => {
+    try {
+      await api.patch(`/v1/exercise/${exercise.id}`, {
+        enabled: !exercise.enabled
+      })
+      await fetchData()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to update exercise')
+    }
+  }
+
+  // Filter exercises based on filter criteria
+  const getFilteredExercises = () => {
+    return exercises.filter(exercise => {
+      // Filter by name
+      if (filterName && !exercise.name.toLowerCase().includes(filterName.toLowerCase())) {
+        return false
+      }
+
+      // Filter by muscle group
+      if (filterMuscleGroup !== '') {
+        const muscleGroupId = typeof filterMuscleGroup === 'number' ? filterMuscleGroup : parseInt(filterMuscleGroup, 10)
+        const hasPrimary = exercise.primary_muscle_group_ids?.includes(muscleGroupId) || false
+        const hasSecondary = exercise.secondary_muscle_group_ids?.includes(muscleGroupId) || false
+        if (!hasPrimary && !hasSecondary) {
+          return false
+        }
+      }
+
+      // Filter by enabled status
+      if (filterEnabled === 'enabled' && !exercise.enabled) {
+        return false
+      }
+      if (filterEnabled === 'disabled' && exercise.enabled) {
+        return false
+      }
+
+      return true
+    })
+  }
+
   const handleEdit = (exercise: Exercise) => {
     setEditingExercise(exercise)
     setFormData({
       name: exercise.name,
-      primary_muscle_group_id: exercise.primary_muscle_group_id.toString(),
-      secondary_muscle_group_ids: exercise.secondary_muscle_group_ids || []
+      primary_muscle_group_ids: exercise.primary_muscle_group_ids || [],
+      secondary_muscle_group_ids: exercise.secondary_muscle_group_ids || [],
+      enabled: exercise.enabled ?? true
     })
+    setPrimaryDropdownValue('')
     setSecondaryDropdownValue('')
     setShowAddForm(true)
   }
@@ -144,8 +204,9 @@ export default function AdminDashboard() {
       if (muscleGroupModalContext === 'primary') {
         setFormData(prev => ({
           ...prev,
-          primary_muscle_group_id: response.data.id.toString()
+          primary_muscle_group_ids: [...prev.primary_muscle_group_ids, response.data.id]
         }))
+        setPrimaryDropdownValue('')
       } else {
         // Add to secondary muscle groups
         setFormData(prev => ({
@@ -177,16 +238,39 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleMuscleGroupSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handlePrimaryMuscleGroupSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value
     if (value === '__create_new__') {
-      // Reset dropdown to empty and show modal for primary
-      setFormData({ ...formData, primary_muscle_group_id: '' })
+      // Show modal for primary
       setMuscleGroupModalContext('primary')
       setShowMuscleGroupModal(true)
-    } else {
-      setFormData({ ...formData, primary_muscle_group_id: value })
+      setPrimaryDropdownValue('')
+    } else if (value && value !== '') {
+      // Add to primary muscle groups if not already selected
+      const id = parseInt(value, 10)
+      if (!isNaN(id)) {
+        setFormData(prev => {
+          if (prev.primary_muscle_group_ids.includes(id)) {
+            // Already selected, don't add again
+            return prev
+          }
+          // Add the new ID
+          return {
+            ...prev,
+            primary_muscle_group_ids: [...prev.primary_muscle_group_ids, id]
+          }
+        })
+      }
+      // Reset dropdown to empty after selection
+      setPrimaryDropdownValue('')
     }
+  }
+
+  const removePrimaryMuscleGroup = (id: number) => {
+    setFormData(prev => ({
+      ...prev,
+      primary_muscle_group_ids: prev.primary_muscle_group_ids.filter(mgId => mgId !== id)
+    }))
   }
 
   const handleSecondaryMuscleGroupSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -227,6 +311,91 @@ export default function AdminDashboard() {
     }))
   }
 
+  const handleRefresh = async () => {
+    await fetchData()
+  }
+
+  const handleExport = async () => {
+    try {
+      const response = await api.get('/v1/exercises/export', {
+        responseType: 'blob'
+      })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'exercises_export.csv')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to export exercises')
+    }
+  }
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.csv')) {
+      setError('Please select a CSV file')
+      return
+    }
+
+    setImporting(true)
+    setError('')
+    setImportResult(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await api.post('/v1/exercises/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      setImportResult(response.data)
+      await fetchData()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to import exercises')
+    } finally {
+      setImporting(false)
+      // Reset file input
+      e.target.value = ''
+    }
+  }
+
+  const handleWgerSync = async () => {
+    if (!window.confirm(
+      wgerSyncMode === 'full' 
+        ? 'Are you sure you want to perform a FULL sync? This will DELETE ALL existing exercises and reload from Wger API.'
+        : 'This will sync exercises from Wger API using change data capture (only new/changed exercises will be updated).'
+    )) {
+      return
+    }
+
+    setWgerSyncing(true)
+    setError('')
+    setWgerSyncResult(null)
+
+    try {
+      const response = await api.post('/v1/exercises/sync-wger', null, {
+        params: {
+          full_sync: wgerSyncMode === 'full'
+        }
+      })
+
+      setWgerSyncResult(response.data)
+      await fetchData()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to sync with Wger API')
+    } finally {
+      setWgerSyncing(false)
+    }
+  }
+
   if (loading) {
     return <div className="container">Loading...</div>
   }
@@ -246,12 +415,219 @@ export default function AdminDashboard() {
       </div>
 
       {error && <div className="error" style={{ marginBottom: '20px' }}>{error}</div>}
+      
+      {importResult && (
+        <div style={{ 
+          marginBottom: '20px', 
+          padding: '15px', 
+          background: 'linear-gradient(135deg, rgba(168, 230, 207, 0.2) 0%, rgba(230, 213, 247, 0.2) 100%)',
+          border: '1px solid rgba(168, 230, 207, 0.3)',
+          borderRadius: '8px'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0' }}>Import Results</h3>
+          <p style={{ margin: '5px 0' }}>✅ Created: {importResult.created}</p>
+          <p style={{ margin: '5px 0' }}>🔄 Updated: {importResult.updated}</p>
+          <p style={{ margin: '5px 0' }}>⏭️ Skipped: {importResult.skipped}</p>
+          {importResult.errors.length > 0 && (
+            <div style={{ marginTop: '10px' }}>
+              <strong>Errors:</strong>
+              <ul style={{ margin: '5px 0', paddingLeft: '20px' }}>
+                {importResult.errors.map((err, idx) => (
+                  <li key={idx} style={{ color: '#d32f2f' }}>{err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setImportResult(null)}
+            style={{ marginTop: '10px' }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {wgerSyncResult && (
+        <div style={{ 
+          marginBottom: '20px', 
+          padding: '15px', 
+          background: 'linear-gradient(135deg, rgba(168, 230, 207, 0.2) 0%, rgba(230, 213, 247, 0.2) 100%)',
+          border: '1px solid rgba(168, 230, 207, 0.3)',
+          borderRadius: '8px'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0' }}>Wger Sync Results</h3>
+          <p style={{ margin: '5px 0' }}>✅ Created: {wgerSyncResult.created}</p>
+          <p style={{ margin: '5px 0' }}>🔄 Updated: {wgerSyncResult.updated}</p>
+          <p style={{ margin: '5px 0' }}>⏭️ Skipped: {wgerSyncResult.skipped}</p>
+          <p style={{ margin: '5px 0' }}>💪 Muscle Groups Created: {wgerSyncResult.muscle_groups_created}</p>
+          {wgerSyncResult.errors && wgerSyncResult.errors.length > 0 && (
+            <div style={{ marginTop: '10px' }}>
+              <strong>Errors ({wgerSyncResult.errors.length}):</strong>
+              <ul style={{ margin: '5px 0', paddingLeft: '20px', maxHeight: '200px', overflowY: 'auto' }}>
+                {wgerSyncResult.errors.map((err, idx) => (
+                  <li key={idx} style={{ color: '#d32f2f', fontSize: '12px' }}>{err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setWgerSyncResult(null)}
+            style={{ marginTop: '10px' }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div style={{ marginBottom: '20px' }}>
         {!showAddForm ? (
-          <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
-            Add New Exercise
-          </button>
+          <>
+            <div style={{ 
+              display: 'flex', 
+              gap: '8px', 
+              flexWrap: 'wrap', 
+              alignItems: 'center'
+            }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => setShowAddForm(true)}
+                style={{ padding: '10px 20px', fontSize: '14px' }}
+              >
+                Add New Exercise
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleRefresh} 
+                title="Refresh exercises list"
+                style={{ padding: '10px 20px', fontSize: '14px' }}
+              >
+                🔄 Refresh
+              </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleExport} 
+                title="Export exercises to CSV"
+                style={{ padding: '10px 20px', fontSize: '14px' }}
+              >
+                📥 Export CSV
+              </button>
+              <label 
+                className="btn btn-secondary" 
+                style={{ 
+                  cursor: 'pointer', 
+                  margin: 0, 
+                  padding: '10px 20px', 
+                  fontSize: '14px',
+                  display: 'inline-block'
+                }}
+              >
+                📤 Import CSV
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImport}
+                  disabled={importing}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <div style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                padding: '6px 10px',
+                background: 'rgba(255, 255, 255, 0.6)',
+                border: '1px solid rgba(230, 213, 247, 0.4)',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                marginLeft: '4px'
+              }}>
+                <span style={{ 
+                  fontSize: '13px', 
+                  fontWeight: '600', 
+                  color: '#4A4A4A',
+                  whiteSpace: 'nowrap'
+                }}>
+                  Wger Sync:
+                </span>
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '4px', 
+                  cursor: 'pointer', 
+                  fontSize: '13px',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  transition: 'background 0.2s',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(230, 213, 247, 0.2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <input
+                    type="radio"
+                    name="wgerSyncMode"
+                    value="partial"
+                    checked={wgerSyncMode === 'partial'}
+                    onChange={(e) => setWgerSyncMode(e.target.value as 'partial' | 'full')}
+                    disabled={wgerSyncing}
+                    style={{ margin: 0, cursor: 'pointer' }}
+                  />
+                  <span>Partial</span>
+                </label>
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '4px', 
+                  cursor: 'pointer', 
+                  fontSize: '13px',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  transition: 'background 0.2s',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(230, 213, 247, 0.2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <input
+                    type="radio"
+                    name="wgerSyncMode"
+                    value="full"
+                    checked={wgerSyncMode === 'full'}
+                    onChange={(e) => setWgerSyncMode(e.target.value as 'partial' | 'full')}
+                    disabled={wgerSyncing}
+                    style={{ margin: 0, cursor: 'pointer' }}
+                  />
+                  <span>Full</span>
+                </label>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleWgerSync}
+                  disabled={wgerSyncing}
+                  title="Sync exercises from Wger API"
+                  style={{ 
+                    padding: '8px 16px', 
+                    fontSize: '13px',
+                    marginLeft: '2px'
+                  }}
+                >
+                  {wgerSyncing ? 'Syncing...' : '🔄 Sync'}
+                </button>
+              </div>
+              {(importing || wgerSyncing) && (
+                <span style={{ 
+                  fontSize: '13px', 
+                  color: '#666',
+                  fontStyle: 'italic',
+                  marginLeft: '8px',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {importing ? 'Importing...' : wgerSyncing ? 'Syncing...' : ''}
+                </span>
+              )}
+            </div>
+          </>
         ) : (
           <div className="card" style={{ marginBottom: '20px' }}>
             <h2>{editingExercise ? 'Edit Exercise' : 'Add New Exercise'}</h2>
@@ -268,20 +644,104 @@ export default function AdminDashboard() {
               </div>
 
               <div className="form-group">
-                <label>Primary Muscle Group</label>
+                <label>Primary Muscle Groups (at least one required)</label>
                 <select
-                  value={formData.primary_muscle_group_id}
-                  onChange={handleMuscleGroupSelectChange}
-                  required
+                  value={primaryDropdownValue}
+                  onChange={handlePrimaryMuscleGroupSelectChange}
+                  style={{ marginBottom: '12px' }}
                 >
-                  <option value="">Select a muscle group</option>
-                  {muscleGroups.map(mg => (
-                    <option key={mg.id} value={mg.id}>{mg.name}</option>
-                  ))}
+                  <option value="">Select a primary muscle group</option>
+                  {muscleGroups
+                    .filter(mg => {
+                      // Exclude already selected primary groups
+                      const isAlreadySelected = formData.primary_muscle_group_ids.includes(mg.id)
+                      return !isAlreadySelected
+                    })
+                    .map(mg => (
+                      <option key={mg.id} value={mg.id.toString()}>{mg.name}</option>
+                    ))}
                   <option value="__create_new__" style={{ fontStyle: 'italic', color: '#666' }}>
                     + Create New Muscle Group
                   </option>
                 </select>
+                {formData.primary_muscle_group_ids.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                    {formData.primary_muscle_group_ids.map((id, index) => {
+                      const mg = muscleGroups.find(m => m.id === id)
+                      if (!mg) {
+                        return (
+                          <div
+                            key={`${id}-${index}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '6px 12px',
+                              background: 'linear-gradient(135deg, rgba(230, 213, 247, 0.2) 0%, rgba(168, 230, 207, 0.2) 100%)',
+                              border: '1px solid rgba(230, 213, 247, 0.3)',
+                              borderRadius: '8px',
+                              fontSize: '14px'
+                            }}
+                          >
+                            <span>Loading...</span>
+                            <button
+                              type="button"
+                              onClick={() => removePrimaryMuscleGroup(id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '18px',
+                                lineHeight: '1',
+                                padding: '0',
+                                color: '#666',
+                                fontWeight: 'bold'
+                              }}
+                              title="Remove"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )
+                      }
+                      return (
+                        <div
+                          key={`${id}-${mg.name}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 12px',
+                            background: 'linear-gradient(135deg, rgba(168, 230, 207, 0.3) 0%, rgba(230, 213, 247, 0.3) 100%)',
+                            border: '1px solid rgba(168, 230, 207, 0.4)',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          <span>{mg.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => removePrimaryMuscleGroup(id)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '18px',
+                              lineHeight: '1',
+                              padding: '0',
+                              color: '#666',
+                              fontWeight: 'bold'
+                            }}
+                            title="Remove"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -294,9 +754,8 @@ export default function AdminDashboard() {
                   <option value="">Select a secondary muscle group</option>
                   {muscleGroups
                     .filter(mg => {
-                      // Exclude primary muscle group and already selected secondary groups
-                      const primaryId = formData.primary_muscle_group_id ? parseInt(formData.primary_muscle_group_id, 10) : null
-                      const isPrimary = primaryId !== null && mg.id === primaryId
+                      // Exclude primary muscle groups and already selected secondary groups
+                      const isPrimary = formData.primary_muscle_group_ids.includes(mg.id)
                       const isAlreadySelected = formData.secondary_muscle_group_ids.includes(mg.id)
                       return !isPrimary && !isAlreadySelected
                     })
@@ -387,6 +846,18 @@ export default function AdminDashboard() {
                 )}
               </div>
 
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.enabled}
+                    onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  <span>Enabled (visible to users)</span>
+                </label>
+              </div>
+
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                 <button type="submit" className="btn btn-primary">
                   {editingExercise ? 'Update Exercise' : 'Create Exercise'}
@@ -397,7 +868,8 @@ export default function AdminDashboard() {
                   onClick={() => {
                     setShowAddForm(false)
                     setEditingExercise(null)
-                    setFormData({ name: '', primary_muscle_group_id: '', secondary_muscle_group_ids: [] })
+                    setFormData({ name: '', primary_muscle_group_ids: [], secondary_muscle_group_ids: [], enabled: true })
+                    setPrimaryDropdownValue('')
                     setSecondaryDropdownValue('')
                   }}
                 >
@@ -494,14 +966,116 @@ export default function AdminDashboard() {
       )}
 
       <div className="card">
-        <h2>Exercises ({exercises.length})</h2>
-        {exercises.length === 0 ? (
+        <h2>Exercises ({exercises.length}) {getFilteredExercises().length !== exercises.length && `(Filtered: ${getFilteredExercises().length})`}</h2>
+        
+        {/* Filter Controls */}
+        <div style={{ 
+          marginBottom: '20px', 
+          padding: '16px', 
+          background: 'rgba(255, 255, 255, 0.5)', 
+          borderRadius: '8px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '12px',
+          alignItems: 'flex-end'
+        }}>
+          <div style={{ flex: '1', minWidth: '200px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600, color: '#4A4A4A' }}>
+              Filter by Name
+            </label>
+            <input
+              type="text"
+              placeholder="Search exercise name..."
+              value={filterName}
+              onChange={(e) => setFilterName(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                borderRadius: '6px',
+                fontSize: '14px'
+              }}
+            />
+          </div>
+          
+          <div style={{ flex: '1', minWidth: '200px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600, color: '#4A4A4A' }}>
+              Filter by Muscle Group
+            </label>
+            <select
+              value={filterMuscleGroup}
+              onChange={(e) => setFilterMuscleGroup(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                borderRadius: '6px',
+                fontSize: '14px',
+                background: 'white'
+              }}
+            >
+              <option value="">All Muscle Groups</option>
+              {muscleGroups.map(mg => (
+                <option key={mg.id} value={mg.id}>{mg.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div style={{ flex: '1', minWidth: '150px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: 600, color: '#4A4A4A' }}>
+              Filter by Status
+            </label>
+            <select
+              value={filterEnabled}
+              onChange={(e) => setFilterEnabled(e.target.value as 'all' | 'enabled' | 'disabled')}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                borderRadius: '6px',
+                fontSize: '14px',
+                background: 'white'
+              }}
+            >
+              <option value="all">All Exercises</option>
+              <option value="enabled">Enabled Only</option>
+              <option value="disabled">Disabled Only</option>
+            </select>
+          </div>
+          
+          {(filterName || filterMuscleGroup !== '' || filterEnabled !== 'all') && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterName('')
+                setFilterMuscleGroup('')
+                setFilterEnabled('all')
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#f0f0f0',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#4A4A4A'
+              }}
+            >
+              Clear Filters
+            </button>
+          )}
+        </div>
+
+        {getFilteredExercises().length === 0 ? (
           <p style={{ textAlign: 'center', padding: '40px' }}>
-            No exercises found. Create your first exercise above.
+            {exercises.length === 0 
+              ? 'No exercises found. Create your first exercise above.'
+              : 'No exercises match the current filters.'}
           </p>
         ) : (
           <div style={{ display: 'grid', gap: '16px' }}>
-            {exercises.map(exercise => (
+            {getFilteredExercises().map(exercise => (
               <div
                 key={exercise.id}
                 style={{
@@ -526,9 +1100,26 @@ export default function AdminDashboard() {
                 }}
               >
                 <div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '18px' }}>{exercise.name}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '18px' }}>{exercise.name}</h3>
+                    {!exercise.enabled && (
+                      <span style={{
+                        padding: '2px 8px',
+                        background: '#ff6b6b',
+                        color: 'white',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        textTransform: 'uppercase'
+                      }}>
+                        Disabled
+                      </span>
+                    )}
+                  </div>
                   <p style={{ margin: '0', fontSize: '14px' }}>
-                    Primary: <strong>{getMuscleGroupName(exercise.primary_muscle_group_id)}</strong>
+                    Primary: <strong>{exercise.primary_muscle_group_ids && exercise.primary_muscle_group_ids.length > 0 
+                      ? exercise.primary_muscle_group_ids.map(id => getMuscleGroupName(id)).join(', ')
+                      : 'None'}</strong>
                     {exercise.secondary_muscle_group_ids && exercise.secondary_muscle_group_ids.length > 0 && (
                       <span style={{ marginLeft: '15px' }}>
                         Secondary: {exercise.secondary_muscle_group_ids.map(id => getMuscleGroupName(id)).join(', ')}
@@ -536,7 +1127,32 @@ export default function AdminDashboard() {
                     )}
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <button
+                    onClick={() => handleToggleEnabled(exercise)}
+                    style={{ 
+                      fontSize: '14px', 
+                      padding: '8px 16px',
+                      background: exercise.enabled 
+                        ? 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)'
+                        : 'linear-gradient(135deg, #51cf66 0%, #40c057 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      transition: 'all 0.2s ease'
+                    }}
+                    title={exercise.enabled ? 'Disable exercise' : 'Enable exercise'}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)'
+                    }}
+                  >
+                    {exercise.enabled ? 'Disable' : 'Enable'}
+                  </button>
                   <button
                     className="btn btn-secondary"
                     onClick={() => handleEdit(exercise)}

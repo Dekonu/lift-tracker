@@ -10,8 +10,3 @@ class MuscleGroup(Base):
     id: Mapped[int] = mapped_column(autoincrement=True, primary_key=True, init=False)
     name: Mapped[str] = mapped_column(String(50), unique=True, index=True)
 
-    # Relationships
-    primary_exercises: Mapped[list["Exercise"]] = relationship(
-        "Exercise", foreign_keys="[Exercise.primary_muscle_group_id]", back_populates="primary_muscle_group", init=False
-    )
-
