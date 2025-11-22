@@ -26,9 +26,68 @@
 
 ---
 
+## 🚧 Future Enhancements
+
+The following features have infrastructure in place but require UI/API implementation:
+
+### LLM Integration
+- **Status**: Database models and schemas ready
+- **To Implement**: 
+  - API endpoints for LLM-powered workout generation
+  - Integration with LLM services (OpenAI, Anthropic, etc.)
+  - Context-aware exercise selection based on user profile
+  - Smart progression suggestions
+
+### Calendar UI
+- **Status**: Workout sessions support date/time tracking
+- **To Implement**:
+  - Calendar view for scheduling workouts
+  - Drag-and-drop workout assignment
+  - Program application to calendar dates
+  - Planned vs. actual workout comparison
+
+### Social Features UI
+- **Status**: User relationships and sharing permissions models ready
+- **To Implement**:
+  - Follow/unfollow users interface
+  - Share workout templates and programs
+  - Public workout feed
+  - Social workout challenges
+
+### Advanced Analytics Dashboard
+- **Status**: Volume tracking and strength progression models ready
+- **To Implement**:
+  - Volume progression charts
+  - Strength progression graphs
+  - Muscle group balance visualization
+  - Training frequency analytics
+  - Plateau detection and alerts
+
+---
+
 ## 📖 About
 
 **Lift Tracker** is a comprehensive exercise and workout tracking application that enables users to create detailed training sessions by combining exercises and sets. The application integrates with the [Wger API](https://wger.de/api/v2/) to provide an extensive exercise database, making it easy to build and track personalized workout routines.
+
+### Infrastructure Status
+
+The application includes comprehensive infrastructure for advanced features:
+
+✅ **Implemented:**
+- User profiles with goals, experience levels, and training preferences
+- Equipment management and exercise enhancements (categories, variations)
+- Complete workout structure (templates, sessions, entries, sets)
+- Advanced set tracking (RIR/RPE, percentages, tempo, rest periods)
+- 1RM tracking with estimation methods
+- Multi-week programs with periodization support (linear, undulating, block)
+- Social features infrastructure (user relationships, sharing permissions)
+- Analytics models (volume tracking, strength progression)
+
+🚧 **Deferred (Infrastructure Ready, UI/Integration Pending):**
+- **LLM Integration**: Endpoints and data structures ready for AI-powered workout generation
+- **Calendar UI**: Database supports workout scheduling; calendar interface to be built
+- **Social UI**: Backend supports following, sharing, and permissions; frontend to be implemented
+- **Advanced Analytics Dashboard**: Data models ready; visualization dashboards to be built
 
 ### Key Features
 

@@ -23,6 +23,10 @@ class SetCreate(SetBase):
     model_config = ConfigDict(extra="forbid")
 
 
+class SetCreateInternal(SetBase):
+    exercise_instance_id: int
+
+
 class SetUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

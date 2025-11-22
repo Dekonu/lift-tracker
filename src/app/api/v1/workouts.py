@@ -15,9 +15,9 @@ from ...crud.crud_set import crud_sets
 from ...crud.crud_workout import crud_workouts
 from ...models.exercise_instance import ExerciseInstance
 from ...models.set import Set
-from ...schemas.exercise_instance import ExerciseInstanceCreate, ExerciseInstanceRead
-from ...schemas.set import SetCreate, SetRead, SetUpdate
-from ...schemas.workout import WorkoutCreate, WorkoutRead, WorkoutUpdate
+from ...schemas.exercise_instance import ExerciseInstanceCreate, ExerciseInstanceCreateInternal, ExerciseInstanceRead
+from ...schemas.set import SetCreate, SetCreateInternal, SetRead, SetUpdate
+from ...schemas.workout import WorkoutCreate, WorkoutCreateInternal, WorkoutRead, WorkoutUpdate
 
 # Rebuild models to resolve forward references for Pydantic v2
 # Must rebuild in reverse dependency order (SetRead -> ExerciseInstanceRead -> WorkoutRead)
@@ -30,7 +30,8 @@ router = APIRouter(tags=["workouts"])
 
 async def get_workout_with_relations(db: AsyncSession, workout_id: int, user_id: int) -> WorkoutRead | None:
     """Get a workout with all its relations."""
-    workout = await crud_workouts.get(db=db, id=workout_id, schema_to_select=WorkoutRead)
+    # First, verify workout exists and belongs to user (without schema to avoid cartesian product)
+    workout = await crud_workouts.get(db=db, id=workout_id)
     if workout is None:
         return None
 
@@ -43,7 +44,7 @@ async def get_workout_with_relations(db: AsyncSession, workout_id: int, user_id:
     if workout_user_id != user_id:
         return None
 
-    # Fetch exercise instances with sets
+    # Fetch exercise instances with sets using a separate query to avoid cartesian product
     stmt = (
         select(ExerciseInstance)
         .where(ExerciseInstance.workout_id == workout_id)
@@ -79,13 +80,18 @@ async def get_workout_with_relations(db: AsyncSession, workout_id: int, user_id:
         }
         exercise_instance_reads.append(ExerciseInstanceRead(**ei_dict))
 
-    # Update workout with exercise instances
-    if isinstance(workout, dict):
-        workout["exercise_instances"] = exercise_instance_reads
-    else:
-        workout.exercise_instances = exercise_instance_reads
+    # Get workout as WorkoutRead schema (separate query to avoid cartesian product)
+    workout_read = await crud_workouts.get(db=db, id=workout_id, schema_to_select=WorkoutRead)
+    if workout_read is None:
+        return None
 
-    return workout
+    # Add exercise instances to workout
+    if isinstance(workout_read, dict):
+        workout_read["exercise_instances"] = exercise_instance_reads
+        return WorkoutRead(**workout_read)
+    else:
+        workout_read.exercise_instances = exercise_instance_reads
+        return workout_read
 
 
 @router.post("/workout", response_model=WorkoutRead, status_code=201)
@@ -96,9 +102,14 @@ async def create_workout(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutRead:
     """Create a new workout."""
-    workout_dict = workout.model_dump()
-    workout_dict["user_id"] = current_user["id"]
-    created = await crud_workouts.create(db=db, object=workout_dict)
+    workout_internal = WorkoutCreateInternal(
+        date=workout.date,
+        user_id=current_user["id"]
+    )
+    created = await crud_workouts.create(db=db, object=workout_internal)
+    await db.commit()
+    await db.refresh(created)
+    
     workout_read = await get_workout_with_relations(db=db, workout_id=created.id, user_id=current_user["id"])
     if workout_read is None:
         raise NotFoundException("Created workout not found")
@@ -239,9 +250,14 @@ async def create_exercise_instance(
     if exercise is None:
         raise NotFoundException("Exercise not found")
 
-    exercise_instance_dict = exercise_instance.model_dump()
-    exercise_instance_dict["workout_id"] = workout_id
-    created = await crud_exercise_instances.create(db=db, object=exercise_instance_dict)
+    exercise_instance_internal = ExerciseInstanceCreateInternal(
+        exercise_id=exercise_instance.exercise_id,
+        order=exercise_instance.order,
+        workout_id=workout_id
+    )
+    created = await crud_exercise_instances.create(db=db, object=exercise_instance_internal)
+    await db.commit()
+    await db.refresh(created)
 
     exercise_instance_read = await crud_exercise_instances.get(
         db=db, id=created.id, schema_to_select=ExerciseInstanceRead
@@ -322,9 +338,18 @@ async def create_set(
     if workout_user_id != current_user["id"]:
         raise ForbiddenException("You do not have permission to modify this workout")
 
-    set_dict = set_data.model_dump()
-    set_dict["exercise_instance_id"] = exercise_instance_id
-    created = await crud_sets.create(db=db, object=set_dict)
+    set_internal = SetCreateInternal(
+        weight_value=set_data.weight_value,
+        weight_type=set_data.weight_type,
+        unit=set_data.unit,
+        rest_time_seconds=set_data.rest_time_seconds,
+        rir=set_data.rir,
+        notes=set_data.notes,
+        exercise_instance_id=exercise_instance_id
+    )
+    created = await crud_sets.create(db=db, object=set_internal)
+    await db.commit()
+    await db.refresh(created)
 
     set_read = await crud_sets.get(db=db, id=created.id, schema_to_select=SetRead)
     if set_read is None:

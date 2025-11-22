@@ -27,6 +27,10 @@ class WorkoutCreate(WorkoutBase):
     model_config = ConfigDict(extra="forbid")
 
 
+class WorkoutCreateInternal(WorkoutBase):
+    user_id: int
+
+
 class WorkoutUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

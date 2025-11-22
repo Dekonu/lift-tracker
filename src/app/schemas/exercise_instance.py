@@ -22,6 +22,10 @@ class ExerciseInstanceCreate(ExerciseInstanceBase):
     model_config = ConfigDict(extra="forbid")
 
 
+class ExerciseInstanceCreateInternal(ExerciseInstanceBase):
+    workout_id: int
+
+
 class ExerciseInstanceUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

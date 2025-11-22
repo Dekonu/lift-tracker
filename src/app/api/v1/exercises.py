@@ -18,6 +18,8 @@ from ...crud.crud_exercise import (
     get_exercise_with_muscle_groups,
     update_exercise_with_muscle_groups,
 )
+from ...crud.crud_exercise_equipment import crud_exercise_equipment
+from ...crud.crud_equipment import crud_equipment
 from ...crud.crud_muscle_group import crud_muscle_groups
 from ...schemas.exercise import ExerciseCreate, ExerciseRead, ExerciseUpdate
 from ...schemas.muscle_group import MuscleGroupCreate
@@ -54,7 +56,42 @@ async def create_exercise(
             if mg is None:
                 raise NotFoundException(f"Secondary muscle group with ID {mg_id} not found")
 
-    created = await create_exercise_with_muscle_groups(db=db, exercise_data=exercise)
+    # Validate equipment exists
+    if exercise.equipment_ids:
+        for eq_id in exercise.equipment_ids:
+            equipment = await crud_equipment.get(db=db, id=eq_id)
+            if equipment is None:
+                raise NotFoundException(f"Equipment with ID {eq_id} not found")
+
+    # Extract equipment_ids before creating exercise
+    equipment_ids = exercise.equipment_ids or []
+    
+    # Create exercise (without equipment_ids in the model)
+    exercise_data_no_equipment = exercise.model_copy()
+    exercise_data_no_equipment.equipment_ids = []
+    created = await create_exercise_with_muscle_groups(db=db, exercise_data=exercise_data_no_equipment)
+    
+    # Link equipment
+    created_id = created.id if hasattr(created, "id") else created["id"]
+    if equipment_ids:
+        await crud_exercise_equipment.set_equipment_for_exercise(db=db, exercise_id=created_id, equipment_ids=equipment_ids)
+        await db.commit()
+    
+    # Fetch exercise with equipment
+    exercise_read = await crud_exercises.get(db=db, id=created_id, schema_to_select=ExerciseRead)
+    if exercise_read:
+        # Get equipment IDs
+        equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=created_id)
+        equipment_ids_list = [link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"] for link in equipment_links]
+        
+        # Add equipment_ids to response
+        if isinstance(exercise_read, dict):
+            exercise_read["equipment_ids"] = equipment_ids_list
+        else:
+            exercise_read.equipment_ids = equipment_ids_list
+        
+        return ExerciseRead(**exercise_read) if isinstance(exercise_read, dict) else ExerciseRead.model_validate(exercise_read)
+    
     return cast(ExerciseRead, created)
 
 
@@ -65,8 +102,13 @@ async def read_exercises(
     page: int = 1,
     items_per_page: int = 50,
     current_user: Annotated[dict | None, Depends(get_optional_user)] = None,
+    equipment_ids: str | None = None,  # Comma-separated list of equipment IDs
 ) -> dict[str, Any]:
-    """Get all exercises. Only returns enabled exercises for non-admin users."""
+    """Get all exercises. Only returns enabled exercises for non-admin users.
+    
+    Can filter by equipment_ids (comma-separated). Returns exercises that require
+    ALL specified equipment (AND relationship).
+    """
     # Check if user is admin/superuser
     is_admin = current_user and current_user.get("is_superuser", False)
     
@@ -75,16 +117,83 @@ async def read_exercises(
     if not is_admin:
         filters["enabled"] = True
     
-    exercises_data = await crud_exercises.get_multi(
-        db=db,
-        offset=compute_offset(page, items_per_page),
-        limit=items_per_page,
-        schema_to_select=ExerciseRead,
-        **filters,
-    )
-
-    response: dict[str, Any] = paginated_response(crud_data=exercises_data, page=page, items_per_page=items_per_page)
-    return response
+    # Filter by equipment if specified (requires fetching all and filtering)
+    if equipment_ids:
+        equipment_id_list = [int(eq_id.strip()) for eq_id in equipment_ids.split(",") if eq_id.strip()]
+        
+        # Need to get all exercises to filter by equipment (unfortunately)
+        # TODO: Optimize with SQL JOIN query for better performance
+        all_exercises_data = await crud_exercises.get_multi(
+            db=db,
+            offset=0,
+            limit=10000,
+            schema_to_select=ExerciseRead,
+            return_total_count=True,
+            **filters,
+        )
+        all_exercises = all_exercises_data.get("data", [])
+        
+        # Get equipment links for all exercises and filter
+        filtered_exercises = []
+        for exercise in all_exercises:
+            exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
+            equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
+            exercise_equipment_ids = {
+                link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"]
+                for link in equipment_links
+            }
+            
+            # Check if exercise has ALL required equipment (AND relationship)
+            if all(eq_id in exercise_equipment_ids for eq_id in equipment_id_list):
+                # Add equipment_ids to exercise
+                if isinstance(exercise, dict):
+                    exercise["equipment_ids"] = list(exercise_equipment_ids)
+                else:
+                    exercise.equipment_ids = list(exercise_equipment_ids)
+                filtered_exercises.append(exercise)
+        
+        # Paginate filtered results
+        total_count = len(filtered_exercises)
+        start = compute_offset(page, items_per_page)
+        end = start + items_per_page
+        exercises = filtered_exercises[start:end]
+    else:
+        # Get exercises with pagination (normal case - much faster)
+        exercises_data = await crud_exercises.get_multi(
+            db=db,
+            offset=compute_offset(page, items_per_page),
+            limit=items_per_page,
+            schema_to_select=ExerciseRead,
+            return_total_count=True,
+            **filters,
+        )
+        
+        exercises = exercises_data.get("data", [])
+        total_count = exercises_data.get("total_count", 0)
+        
+        # Add equipment_ids to exercises (only for current page)
+        for exercise in exercises:
+            exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
+            equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
+            equipment_ids_list = [
+                link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"]
+                for link in equipment_links
+            ]
+            if isinstance(exercise, dict):
+                exercise["equipment_ids"] = equipment_ids_list
+            else:
+                exercise.equipment_ids = equipment_ids_list
+    
+    # Calculate has_more
+    has_more = (page * items_per_page) < total_count
+    
+    return {
+        "data": exercises,
+        "total_count": total_count,
+        "has_more": has_more,
+        "page": page,
+        "items_per_page": items_per_page,
+    }
 
 
 @router.get("/exercise/{exercise_id}", response_model=ExerciseRead)
@@ -110,6 +219,19 @@ async def read_exercise(
             enabled = getattr(exercise, "enabled", True)
         if not enabled:
             raise NotFoundException("Exercise not found")
+    
+    # Get equipment IDs
+    equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
+    equipment_ids_list = [
+        link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"]
+        for link in equipment_links
+    ]
+    
+    # Add equipment_ids to exercise
+    if isinstance(exercise, dict):
+        exercise["equipment_ids"] = equipment_ids_list
+    else:
+        exercise.equipment_ids = equipment_ids_list
 
     return cast(ExerciseRead, exercise)
 
@@ -158,8 +280,26 @@ async def update_exercise(
             mg = await crud_muscle_groups.get(db=db, id=mg_id)
             if mg is None:
                 raise NotFoundException(f"Secondary muscle group with ID {mg_id} not found")
-
-    await update_exercise_with_muscle_groups(db=db, exercise_id=exercise_id, exercise_data=values)
+    
+    # Validate equipment if provided
+    equipment_ids = None
+    if values.equipment_ids is not None:
+        equipment_ids = values.equipment_ids
+        for eq_id in equipment_ids:
+            equipment = await crud_equipment.get(db=db, id=eq_id)
+            if equipment is None:
+                raise NotFoundException(f"Equipment with ID {eq_id} not found")
+    
+    # Update exercise (without equipment_ids)
+    exercise_data_no_equipment = values.model_copy()
+    exercise_data_no_equipment.equipment_ids = None
+    await update_exercise_with_muscle_groups(db=db, exercise_id=exercise_id, exercise_data=exercise_data_no_equipment)
+    
+    # Update equipment links if provided
+    if equipment_ids is not None:
+        await crud_exercise_equipment.set_equipment_for_exercise(db=db, exercise_id=exercise_id, equipment_ids=equipment_ids)
+        await db.commit()
+    
     return {"message": "Exercise updated"}
 
 

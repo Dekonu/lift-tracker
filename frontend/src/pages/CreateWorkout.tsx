@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
+import { useExercises } from '../contexts/ExercisesContext'
 
 interface Exercise {
   id: number
   name: string
-  primary_muscle_group_id: number
+  primary_muscle_group_ids: number[]
 }
 
 interface ExerciseInstance {
@@ -21,30 +22,32 @@ interface SetData {
   rest_time_seconds?: number
   rir?: number
   notes?: string
+  reps?: number
 }
 
 export default function CreateWorkout() {
   const navigate = useNavigate()
-  const [exercises, setExercises] = useState<Exercise[]>([])
+  const [searchParams] = useSearchParams()
+  const { exercises, loading: exercisesLoading } = useExercises()
   const [selectedExercises, setSelectedExercises] = useState<ExerciseInstance[]>([])
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    fetchExercises()
-  }, [])
-
-  const fetchExercises = async () => {
-    try {
-      const response = await api.get('/v1/exercises?page=1&items_per_page=100')
-      setExercises(response.data.data || [])
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to fetch exercises')
-    } finally {
-      setLoading(false)
+  
+  // Get date from URL or use current date/time
+  const getInitialDate = () => {
+    const dateParam = searchParams.get('date')
+    if (dateParam) {
+      // If date is provided, set time to current time
+      const date = new Date(dateParam)
+      const now = new Date()
+      date.setHours(now.getHours())
+      date.setMinutes(now.getMinutes())
+      return date
     }
+    return new Date()
   }
+  
+  const [workoutDate, setWorkoutDate] = useState<Date>(getInitialDate())
 
   const addExercise = () => {
     if (exercises.length === 0) {
@@ -102,29 +105,58 @@ export default function CreateWorkout() {
     setSaving(true)
 
     try {
-      // Create workout
-      const workoutResponse = await api.post('/v1/workout', {
-        date: new Date().toISOString()
+      // Create workout session with selected date
+      const sessionResponse = await api.post('/v1/workout-session', {
+        user_id: 0, // Will be set by backend from current_user
+        started_at: workoutDate.toISOString(),
+        name: null // Will be auto-generated
       })
 
-      const workoutId = workoutResponse.data.id
+      const sessionId = sessionResponse.data.id
 
-      // Add exercise instances and sets
-      for (const exerciseInstance of selectedExercises) {
-        const eiResponse = await api.post(`/v1/workout/${workoutId}/exercise-instance`, {
+      // Add exercise entries and sets
+      for (let i = 0; i < selectedExercises.length; i++) {
+        const exerciseInstance = selectedExercises[i]
+        const entryResponse = await api.post(`/v1/workout-session/${sessionId}/exercise-entry`, {
+          workout_session_id: sessionId,
           exercise_id: exerciseInstance.exercise_id,
           order: exerciseInstance.order
         })
 
-        const exerciseInstanceId = eiResponse.data.id
+        const exerciseEntryId = entryResponse.data.id
 
         // Add sets
-        for (const set of exerciseInstance.sets) {
-          await api.post(`/v1/exercise-instance/${exerciseInstanceId}/set`, set)
+        for (let setIndex = 0; setIndex < exerciseInstance.sets.length; setIndex++) {
+          const set = exerciseInstance.sets[setIndex]
+          // Convert weight to kg if needed
+          let weight_kg: number | null = null
+          if (set.weight_type === 'static') {
+            if (set.unit === 'kg') {
+              weight_kg = set.weight_value
+            } else if (set.unit === 'lbs') {
+              weight_kg = set.weight_value * 0.453592 // Convert lbs to kg
+            }
+          }
+
+          const setEntry = {
+            exercise_entry_id: exerciseEntryId,
+            set_number: setIndex + 1, // 1-indexed
+            weight_kg: weight_kg,
+            reps: set.reps || null,
+            rir: set.rir || null,
+            percentage_of_1rm: set.weight_type === 'percentage' ? set.weight_value : null,
+            rest_seconds: set.rest_time_seconds || null,
+            notes: set.notes || null,
+            is_warmup: false
+          }
+
+          await api.post(`/v1/exercise-entry/${exerciseEntryId}/set`, setEntry)
         }
       }
 
-      navigate('/home')
+      // Navigate to home with the workout date selected
+      const workoutDateStr = workoutDate.toISOString().split('T')[0]
+      navigate(`/home?date=${workoutDateStr}`)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create workout')
     } finally {
@@ -132,7 +164,7 @@ export default function CreateWorkout() {
     }
   }
 
-  if (loading) {
+  if (exercisesLoading) {
     return <div className="container">Loading exercises...</div>
   }
 
@@ -148,6 +180,28 @@ export default function CreateWorkout() {
       {error && <div className="error" style={{ marginBottom: '20px' }}>{error}</div>}
 
       <form onSubmit={handleSubmit}>
+        <div className="form-group" style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+            Workout Date & Time
+          </label>
+          <input
+            type="datetime-local"
+            value={workoutDate.toISOString().slice(0, 16)}
+            onChange={(e) => setWorkoutDate(new Date(e.target.value))}
+            required
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid rgba(0, 0, 0, 0.1)',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
+          />
+          <p style={{ marginTop: '4px', fontSize: '12px', color: '#666' }}>
+            Select the date and time when this workout was performed
+          </p>
+        </div>
+        
         {selectedExercises.map((exerciseInstance, exerciseIndex) => (
           <div key={exerciseIndex} className="card" style={{ marginBottom: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>

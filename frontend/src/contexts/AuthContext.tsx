@@ -36,9 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             is_superuser: userData.is_superuser || false
           })
         })
-        .catch(() => {
-          localStorage.removeItem('access_token')
-          delete api.defaults.headers.common['Authorization']
+        .catch((error) => {
+          // If 401, the interceptor will handle logout and redirect
+          // Just clear local state here
+          if (error.response?.status !== 401) {
+            localStorage.removeItem('access_token')
+            delete api.defaults.headers.common['Authorization']
+            setUser(null)
+          } else {
+            // For 401, clear user state (interceptor will redirect)
+            setUser(null)
+          }
         })
         .finally(() => setLoading(false))
     } else {
