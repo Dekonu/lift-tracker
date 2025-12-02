@@ -29,8 +29,19 @@ export function ExercisesProvider({ children }: { children: ReactNode }) {
       setError(null)
       // Fetch exercises with pagination - get first 500 for initial load
       // Users can search/filter to find specific exercises
+      // Only fetch enabled exercises for non-admin users (backend handles this)
       const response = await api.get('/v1/exercises?page=1&items_per_page=500')
       const exercisesData = response.data.data || []
+      const totalCount = response.data.total_count || 0
+      
+      // If no exercises found, provide helpful message
+      if (exercisesData.length === 0 && totalCount === 0) {
+        setError('No exercises found. Please sync exercises from Wger API in the admin dashboard.')
+      } else if (exercisesData.length === 0 && totalCount > 0) {
+        // All exercises are disabled
+        setError('No enabled exercises available. Please enable exercises in the admin dashboard.')
+      }
+      
       setExercises(exercisesData)
       
       // Cache in localStorage

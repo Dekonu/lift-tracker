@@ -271,7 +271,19 @@ uv run uvicorn src.app.main:app --reload
 - `GET /api/v1/exercises/export` - Export all exercises as CSV
 - `POST /api/v1/exercises/import` - Import exercises from CSV file with change data capture
 
-### Workouts
+### Workout Sessions (New System - Recommended)
+
+- `POST /api/v1/workout-session` - Create a new workout session
+- `GET /api/v1/workout-sessions` - List all workout sessions for current user (paginated)
+- `GET /api/v1/workout-session/{session_id}` - Get a specific workout session with all entries and sets
+- `PATCH /api/v1/workout-session/{session_id}` - Update a workout session
+- `DELETE /api/v1/workout-session/{session_id}` - Delete a workout session (cascades to entries and sets)
+- `POST /api/v1/workout-session/{session_id}/exercise-entry` - Add an exercise entry to a workout session
+- `GET /api/v1/workout-session/{session_id}/exercise-entries` - Get all exercise entries for a workout session (paginated)
+- `POST /api/v1/exercise-entry/{entry_id}/set` - Add a set to an exercise entry
+- `GET /api/v1/exercise-entry/{entry_id}/sets` - Get all sets for an exercise entry (paginated)
+
+### Workouts (Legacy System)
 
 - `GET /api/v1/workouts` - List user's workouts
 - `GET /api/v1/workout/{id}` - Get workout by ID
@@ -279,16 +291,56 @@ uv run uvicorn src.app.main:app --reload
 - `PATCH /api/v1/workout/{id}` - Update workout
 - `DELETE /api/v1/workout/{id}` - Delete workout
 
-### Exercise Instances
+### Exercise Instances (Legacy System)
 
 - `POST /api/v1/workout/{workout_id}/exercise-instance` - Add exercise to workout
 - `DELETE /api/v1/workout/{workout_id}/exercise-instance/{id}` - Remove exercise from workout
 
-### Sets
+### Sets (Legacy System)
 
 - `POST /api/v1/exercise-instance/{id}/set` - Add set to exercise instance
 - `PATCH /api/v1/set/{id}` - Update set
 - `DELETE /api/v1/set/{id}` - Delete set
+
+### Equipment
+
+- `GET /api/v1/equipment` - List all equipment (paginated, filters by enabled status)
+- `GET /api/v1/equipment/{equipment_id}` - Get a specific equipment item
+- `POST /api/v1/equipment` - Create equipment (admin only)
+- `PATCH /api/v1/equipment/{equipment_id}` - Update equipment (admin only)
+- `DELETE /api/v1/equipment/{equipment_id}` - Delete equipment (admin only)
+- `GET /api/v1/equipment/export` - Export all equipment as CSV
+- `POST /api/v1/equipment/import` - Import equipment from CSV file with change data capture
+- `POST /api/v1/equipment/sync-wger` - Sync equipment from Wger API (supports `full_sync` query parameter)
+
+### Workout Templates
+
+- `POST /api/v1/workout-template` - Create a new workout template
+- `GET /api/v1/workout-templates` - Get workout templates (user's own and public ones, paginated)
+- `GET /api/v1/workout-template/{template_id}` - Get a specific workout template
+- `PATCH /api/v1/workout-template/{template_id}` - Update a workout template
+- `DELETE /api/v1/workout-template/{template_id}` - Delete a workout template
+
+### Programs
+
+- `POST /api/v1/program` - Create a new training program
+- `GET /api/v1/programs` - Get training programs (paginated)
+- `GET /api/v1/program/{program_id}` - Get a specific program
+- `PATCH /api/v1/program/{program_id}` - Update a program
+- `DELETE /api/v1/program/{program_id}` - Delete a program
+
+### 1RM Tracking
+
+- `POST /api/v1/one-rm` - Create or update a 1RM record
+- `GET /api/v1/one-rm` - Get 1RM records (paginated)
+- `GET /api/v1/one-rm/{one_rm_id}` - Get a specific 1RM record
+- `PATCH /api/v1/one-rm/{one_rm_id}` - Update a 1RM record
+- `DELETE /api/v1/one-rm/{one_rm_id}` - Delete a 1RM record
+
+### Analytics
+
+- `GET /api/v1/analytics/volume` - Get volume analytics
+- `GET /api/v1/analytics/strength-progression` - Get strength progression analytics
 
 ---
 

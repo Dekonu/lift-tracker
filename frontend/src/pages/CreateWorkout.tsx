@@ -28,7 +28,7 @@ interface SetData {
 export default function CreateWorkout() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { exercises, loading: exercisesLoading } = useExercises()
+  const { exercises, loading: exercisesLoading, error: exercisesError } = useExercises()
   const [selectedExercises, setSelectedExercises] = useState<ExerciseInstance[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -155,7 +155,8 @@ export default function CreateWorkout() {
 
       // Navigate to home with the workout date selected
       const workoutDateStr = workoutDate.toISOString().split('T')[0]
-      navigate(`/home?date=${workoutDateStr}`)
+      // Use replace: false to allow the Home component to handle the date parameter
+      navigate(`/home?date=${workoutDateStr}`, { replace: false })
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create workout')
     } finally {
@@ -176,7 +177,17 @@ export default function CreateWorkout() {
         </button>
       </div>
 
-      {error && <div className="error" style={{ marginBottom: '20px' }}>{error}</div>}
+      {(error || exercisesError) && (
+        <div className="error" style={{ marginBottom: '20px' }}>
+          {error || exercisesError}
+        </div>
+      )}
+
+      {!exercisesLoading && exercises.length === 0 && !exercisesError && (
+        <div className="error" style={{ marginBottom: '20px' }}>
+          No exercises available. Please create exercises first or sync from Wger API in the admin dashboard.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="form-group" style={{ marginBottom: '24px' }}>

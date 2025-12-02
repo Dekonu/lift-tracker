@@ -54,19 +54,41 @@ export default function Home() {
       if (!isNaN(date.getTime())) {
         setCurrentMonth(date)
         setSelectedDate(date)
-        // Find workout for this date
-        const workoutsForDate = workouts.filter(workout => {
-          const workoutDate = new Date(workout.started_at).toISOString().split('T')[0]
-          return workoutDate === dateParam
-        })
-        if (workoutsForDate.length > 0) {
-          setSelectedWorkout(workoutsForDate[0])
+        
+        // Fetch workouts first, then find and load workout for this date
+        const loadWorkoutForDate = async () => {
+          // Fetch fresh workouts
+          const response = await api.get('/v1/workout-sessions?page=1&items_per_page=1000')
+          const workoutsData = response.data.data || []
+          setWorkouts(workoutsData)
+          
+          // Find workout for this date
+          const workoutsForDate = workoutsData.filter((workout: WorkoutSession) => {
+            const workoutDate = new Date(workout.started_at).toISOString().split('T')[0]
+            return workoutDate === dateParam
+          })
+          
+          if (workoutsForDate.length > 0) {
+            // Fetch full workout details with exercise entries
+            try {
+              const workoutResponse = await api.get(`/v1/workout-session/${workoutsForDate[0].id}`)
+              setSelectedWorkout(workoutResponse.data)
+            } catch (err) {
+              // If fetch fails, just use the basic workout data
+              setSelectedWorkout(workoutsForDate[0])
+            }
+          }
         }
-        // Clear the query parameter
-        navigate('/home', { replace: true })
+        
+        loadWorkoutForDate()
+        
+        // Clear the query parameter after a short delay
+        setTimeout(() => {
+          navigate('/home', { replace: true })
+        }, 100)
       }
     }
-  }, [searchParams, workouts, navigate])
+  }, [searchParams, navigate])
 
   const fetchWorkouts = async (showLoading = false) => {
     try {
@@ -118,13 +140,19 @@ export default function Home() {
     return days
   }
 
-  const handleDateClick = (date: Date) => {
+  const handleDateClick = async (date: Date) => {
     const workoutsForDate = getWorkoutsForDate(date)
+    setSelectedDate(date)
     if (workoutsForDate.length > 0) {
-      setSelectedDate(date)
-      setSelectedWorkout(workoutsForDate[0]) // For now, show first workout if multiple
+      // Fetch full workout details with exercise entries
+      try {
+        const response = await api.get(`/v1/workout-session/${workoutsForDate[0].id}`)
+        setSelectedWorkout(response.data)
+      } catch (err) {
+        // If fetch fails, use the basic workout data
+        setSelectedWorkout(workoutsForDate[0])
+      }
     } else {
-      setSelectedDate(date)
       setSelectedWorkout(null)
     }
   }
@@ -136,16 +164,39 @@ export default function Home() {
     
     try {
       await api.delete(`/v1/workout-session/${workoutId}`)
+      
+      // Clear selected workout and date immediately if deleting the selected workout
+      if (selectedWorkout?.id === workoutId) {
+        setSelectedWorkout(null)
+        setSelectedDate(null)
+      }
+      
       // Remove from local state immediately for instant UI update
-      setWorkouts(prevWorkouts => prevWorkouts.filter(w => w.id !== workoutId))
-      // Also refresh from server to ensure consistency
-      await fetchWorkouts()
-      setSelectedDate(null)
-      setSelectedWorkout(null)
+      setWorkouts(prevWorkouts => {
+        const filtered = prevWorkouts.filter(w => w.id !== workoutId)
+        return filtered
+      })
+      
+      // Refresh from server to ensure consistency
+      await fetchWorkouts(false)
+      
+      // Clear error on success
+      setError('')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete workout')
-      // Refresh workouts on error to ensure state is correct
-      await fetchWorkouts()
+      // If 404, the workout was already deleted - just refresh the list
+      if (err.response?.status === 404) {
+        setWorkouts(prevWorkouts => prevWorkouts.filter(w => w.id !== workoutId))
+        if (selectedWorkout?.id === workoutId) {
+          setSelectedWorkout(null)
+          setSelectedDate(null)
+        }
+        await fetchWorkouts(false)
+        setError('')
+      } else {
+        setError(err.response?.data?.detail || 'Failed to delete workout')
+        // Refresh workouts on error to ensure state is correct
+        await fetchWorkouts(false)
+      }
     }
   }
 
