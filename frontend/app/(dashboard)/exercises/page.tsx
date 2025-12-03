@@ -2,12 +2,34 @@
 
 import { useState, useMemo } from "react";
 import { useExercises } from "@/lib/hooks/use-exercises";
+import { useMuscleGroups } from "@/lib/hooks/use-muscle-groups";
+import { useEquipment } from "@/lib/hooks/use-equipment";
 
 export default function ExercisesPage() {
-  const { data: exercises = [], isLoading } = useExercises();
+  const { data: exercises = [], isLoading: exercisesLoading } = useExercises();
+  const { data: muscleGroupsData = [], isLoading: muscleGroupsLoading } = useMuscleGroups();
+  const { data: equipmentData = [], isLoading: equipmentLoading } = useEquipment();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMuscleGroups, setSelectedMuscleGroups] = useState<number[]>([]);
   const [selectedEquipment, setSelectedEquipment] = useState<number[]>([]);
+
+  // Create a map of muscle group ID to name
+  const muscleGroupMap = useMemo(() => {
+    const map = new Map<number, string>();
+    muscleGroupsData.forEach((mg: any) => {
+      map.set(mg.id, mg.name);
+    });
+    return map;
+  }, [muscleGroupsData]);
+
+  // Create a map of equipment ID to name
+  const equipmentMap = useMemo(() => {
+    const map = new Map<number, string>();
+    equipmentData.forEach((eq: any) => {
+      map.set(eq.id, eq.name);
+    });
+    return map;
+  }, [equipmentData]);
 
   // Get unique muscle groups and equipment from exercises
   const muscleGroups = useMemo(() => {
@@ -16,16 +38,24 @@ export default function ExercisesPage() {
       exercise.primary_muscle_group_ids?.forEach((id: number) => groups.add(id));
       exercise.secondary_muscle_group_ids?.forEach((id: number) => groups.add(id));
     });
-    return Array.from(groups);
-  }, [exercises]);
+    return Array.from(groups).sort((a, b) => {
+      const nameA = muscleGroupMap.get(a) || `Group ${a}`;
+      const nameB = muscleGroupMap.get(b) || `Group ${b}`;
+      return nameA.localeCompare(nameB);
+    });
+  }, [exercises, muscleGroupMap]);
 
   const equipment = useMemo(() => {
     const eq = new Set<number>();
     exercises.forEach((exercise: any) => {
       exercise.equipment_ids?.forEach((id: number) => eq.add(id));
     });
-    return Array.from(eq);
-  }, [exercises]);
+    return Array.from(eq).sort((a, b) => {
+      const nameA = equipmentMap.get(a) || `Equipment ${a}`;
+      const nameB = equipmentMap.get(b) || `Equipment ${b}`;
+      return nameA.localeCompare(nameB);
+    });
+  }, [exercises, equipmentMap]);
 
   // Filter exercises
   const filteredExercises = useMemo(() => {
@@ -72,7 +102,7 @@ export default function ExercisesPage() {
     );
   };
 
-  if (isLoading) {
+  if (exercisesLoading || muscleGroupsLoading || equipmentLoading) {
     return (
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">Loading exercises...</div>
@@ -103,19 +133,22 @@ export default function ExercisesPage() {
                 Muscle Groups
               </label>
               <div className="flex flex-wrap gap-2">
-                {muscleGroups.slice(0, 10).map((mgId) => (
-                  <button
-                    key={mgId}
-                    onClick={() => toggleMuscleGroup(mgId)}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      selectedMuscleGroups.includes(mgId)
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    Group {mgId}
-                  </button>
-                ))}
+                {muscleGroups.map((mgId) => {
+                  const muscleGroupName = muscleGroupMap.get(mgId) || `Group ${mgId}`;
+                  return (
+                    <button
+                      key={mgId}
+                      onClick={() => toggleMuscleGroup(mgId)}
+                      className={`px-3 py-1 rounded-md text-sm ${
+                        selectedMuscleGroups.includes(mgId)
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      {muscleGroupName}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -124,19 +157,22 @@ export default function ExercisesPage() {
                 Equipment
               </label>
               <div className="flex flex-wrap gap-2">
-                {equipment.slice(0, 10).map((eqId) => (
-                  <button
-                    key={eqId}
-                    onClick={() => toggleEquipment(eqId)}
-                    className={`px-3 py-1 rounded-md text-sm ${
-                      selectedEquipment.includes(eqId)
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    Equipment {eqId}
-                  </button>
-                ))}
+                {equipment.map((eqId) => {
+                  const equipmentName = equipmentMap.get(eqId) || `Equipment ${eqId}`;
+                  return (
+                    <button
+                      key={eqId}
+                      onClick={() => toggleEquipment(eqId)}
+                      className={`px-3 py-1 rounded-md text-sm ${
+                        selectedEquipment.includes(eqId)
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      {equipmentName}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -175,14 +211,14 @@ export default function ExercisesPage() {
                       </p>
                     )}
                     <div className="flex items-center space-x-4 mt-2">
-                      {exercise.primary_muscle_group_ids && exercise.primary_muscle_group_ids.length > 0 && (
+                      {exercise.primary_muscle_group_names && exercise.primary_muscle_group_names.length > 0 && (
                         <div className="text-xs text-gray-500">
-                          Primary: {exercise.primary_muscle_group_ids.join(", ")}
+                          Primary: {exercise.primary_muscle_group_names.join(", ")}
                         </div>
                       )}
-                      {exercise.equipment_ids && exercise.equipment_ids.length > 0 && (
+                      {exercise.equipment_names && exercise.equipment_names.length > 0 && (
                         <div className="text-xs text-gray-500">
-                          Equipment: {exercise.equipment_ids.join(", ")}
+                          Equipment: {exercise.equipment_names.join(", ")}
                         </div>
                       )}
                     </div>
