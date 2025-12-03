@@ -18,9 +18,8 @@ from ...schemas.scheduled_workout import (
     ScheduledWorkoutRead,
     ScheduledWorkoutUpdate,
 )
-
-# Rebuild schemas to resolve forward references
-ScheduledWorkoutRead.model_rebuild()
+# Note: Schema rebuilding is handled in src/app/api/v1/__init__.py
+# after all modules are imported to ensure forward references are available
 
 router = APIRouter(tags=["scheduled-workouts"])
 

@@ -129,7 +129,7 @@ psql -U your_user -d lift_tracker -f migration_add_scheduled_workout.sql
 
 ### 3. Start Backend
 ```bash
-uvicorn src.app.main:app --reload
+uv run uvicorn src.app.main:app --reload
 ```
 
 ### 4. Start Frontend

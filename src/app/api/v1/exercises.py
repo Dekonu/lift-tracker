@@ -164,10 +164,16 @@ async def read_exercises(
         # Convert to schema and fetch equipment IDs in batch
         exercise_ids = [ex.id for ex in paginated_exercises]
         if exercise_ids:
-            # Batch fetch all equipment links for this page
-            equipment_links_stmt = select(ExerciseEquipment).where(
-                ExerciseEquipment.exercise_id.in_(exercise_ids)
+            # Batch fetch all equipment links for this page, joining with Equipment to filter by enabled
+            from ...models.equipment import Equipment
+            equipment_links_stmt = (
+                select(ExerciseEquipment)
+                .join(Equipment, ExerciseEquipment.equipment_id == Equipment.id)
+                .where(ExerciseEquipment.exercise_id.in_(exercise_ids))
             )
+            # Filter by enabled status for non-admin users
+            if not is_admin:
+                equipment_links_stmt = equipment_links_stmt.where(Equipment.enabled == True)
             equipment_result = await db.execute(equipment_links_stmt)
             all_equipment_links = equipment_result.scalars().all()
             
@@ -180,19 +186,59 @@ async def read_exercises(
         else:
             equipment_by_exercise = {}
         
-        # Convert to ExerciseRead schema
+        # Fetch muscle group names and equipment names
+        from ...models.muscle_group import MuscleGroup
+        from ...models.equipment import Equipment
+        
+        # Get all unique muscle group IDs from all exercises
+        all_mg_ids = set()
+        for ex in paginated_exercises:
+            all_mg_ids.update(ex.primary_muscle_group_ids or [])
+            all_mg_ids.update(ex.secondary_muscle_group_ids or [])
+        
+        # Batch fetch muscle group names
+        muscle_group_names: dict[int, str] = {}
+        if all_mg_ids:
+            mg_stmt = select(MuscleGroup).where(MuscleGroup.id.in_(list(all_mg_ids)))
+            mg_result = await db.execute(mg_stmt)
+            muscle_groups = mg_result.scalars().all()
+            muscle_group_names = {mg.id: mg.name for mg in muscle_groups}
+        
+        # Get all unique equipment IDs
+        all_equipment_ids = set()
+        for eq_ids in equipment_by_exercise.values():
+            all_equipment_ids.update(eq_ids)
+        
+            # Batch fetch equipment names (only enabled equipment for non-admin users)
+            equipment_names_map: dict[int, str] = {}
+            if all_equipment_ids:
+                eq_stmt = select(Equipment).where(Equipment.id.in_(list(all_equipment_ids)))
+                if not is_admin:
+                    eq_stmt = eq_stmt.where(Equipment.enabled == True)
+                eq_result = await db.execute(eq_stmt)
+                equipment_list = eq_result.scalars().all()
+                equipment_names_map = {eq.id: eq.name for eq in equipment_list}
+        
+        # Convert to ExerciseRead schema with names
         exercises = []
         for ex in paginated_exercises:
+            primary_mg_ids = ex.primary_muscle_group_ids or []
+            secondary_mg_ids = ex.secondary_muscle_group_ids or []
+            equipment_ids_list = equipment_by_exercise.get(ex.id, [])
+            
             ex_dict = {
                 "id": ex.id,
                 "name": ex.name,
-                "primary_muscle_group_ids": ex.primary_muscle_group_ids or [],
-                "secondary_muscle_group_ids": ex.secondary_muscle_group_ids or [],
+                "primary_muscle_group_ids": primary_mg_ids,
+                "secondary_muscle_group_ids": secondary_mg_ids,
                 "enabled": ex.enabled,
                 "category_id": ex.category_id,
                 "instructions": ex.instructions,
                 "common_mistakes": ex.common_mistakes,
-                "equipment_ids": equipment_by_exercise.get(ex.id, []),
+                "equipment_ids": equipment_ids_list,
+                "primary_muscle_group_names": [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in primary_mg_ids],
+                "secondary_muscle_group_names": [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in secondary_mg_ids],
+                "equipment_names": [equipment_names_map.get(eq_id, f"Equipment {eq_id}") for eq_id in equipment_ids_list],
             }
             exercises.append(ExerciseRead(**ex_dict))
     else:
@@ -222,11 +268,17 @@ async def read_exercises(
             exercise_ids = [ex.id for ex in exercise_models]
             exercises = []
             
-            # Batch fetch equipment_ids for all exercises
+            # Batch fetch equipment_ids for all exercises, joining with Equipment to filter by enabled
             if exercise_ids:
-                equipment_links_stmt = select(ExerciseEquipment).where(
-                    ExerciseEquipment.exercise_id.in_(exercise_ids)
+                from ...models.equipment import Equipment
+                equipment_links_stmt = (
+                    select(ExerciseEquipment)
+                    .join(Equipment, ExerciseEquipment.equipment_id == Equipment.id)
+                    .where(ExerciseEquipment.exercise_id.in_(exercise_ids))
                 )
+                # Filter by enabled status for non-admin users
+                if not is_admin:
+                    equipment_links_stmt = equipment_links_stmt.where(Equipment.enabled == True)
                 equipment_result = await db.execute(equipment_links_stmt)
                 all_equipment_links = equipment_result.scalars().all()
                 
@@ -239,18 +291,58 @@ async def read_exercises(
             else:
                 equipment_by_exercise = {}
             
-            # Convert to ExerciseRead schema
+            # Fetch muscle group names and equipment names
+            from ...models.muscle_group import MuscleGroup
+            from ...models.equipment import Equipment
+            
+            # Get all unique muscle group IDs from all exercises
+            all_mg_ids = set()
             for ex in exercise_models:
+                all_mg_ids.update(ex.primary_muscle_group_ids or [])
+                all_mg_ids.update(ex.secondary_muscle_group_ids or [])
+            
+            # Batch fetch muscle group names
+            muscle_group_names: dict[int, str] = {}
+            if all_mg_ids:
+                mg_stmt = select(MuscleGroup).where(MuscleGroup.id.in_(list(all_mg_ids)))
+                mg_result = await db.execute(mg_stmt)
+                muscle_groups = mg_result.scalars().all()
+                muscle_group_names = {mg.id: mg.name for mg in muscle_groups}
+            
+            # Get all unique equipment IDs
+            all_equipment_ids = set()
+            for eq_ids in equipment_by_exercise.values():
+                all_equipment_ids.update(eq_ids)
+            
+            # Batch fetch equipment names (only enabled equipment for non-admin users)
+            equipment_names_map: dict[int, str] = {}
+            if all_equipment_ids:
+                eq_stmt = select(Equipment).where(Equipment.id.in_(list(all_equipment_ids)))
+                if not is_admin:
+                    eq_stmt = eq_stmt.where(Equipment.enabled == True)
+                eq_result = await db.execute(eq_stmt)
+                equipment_list = eq_result.scalars().all()
+                equipment_names_map = {eq.id: eq.name for eq in equipment_list}
+            
+            # Convert to ExerciseRead schema with names
+            for ex in exercise_models:
+                primary_mg_ids = ex.primary_muscle_group_ids or []
+                secondary_mg_ids = ex.secondary_muscle_group_ids or []
+                equipment_ids_list = equipment_by_exercise.get(ex.id, [])
+                
                 ex_dict = {
                     "id": ex.id,
                     "name": ex.name,
-                    "primary_muscle_group_ids": ex.primary_muscle_group_ids or [],
-                    "secondary_muscle_group_ids": ex.secondary_muscle_group_ids or [],
+                    "primary_muscle_group_ids": primary_mg_ids,
+                    "secondary_muscle_group_ids": secondary_mg_ids,
                     "enabled": ex.enabled,
                     "category_id": ex.category_id,
                     "instructions": ex.instructions,
                     "common_mistakes": ex.common_mistakes,
-                    "equipment_ids": equipment_by_exercise.get(ex.id, []),
+                    "equipment_ids": equipment_ids_list,
+                    "primary_muscle_group_names": [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in primary_mg_ids],
+                    "secondary_muscle_group_names": [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in secondary_mg_ids],
+                    "equipment_names": [equipment_names_map.get(eq_id, f"Equipment {eq_id}") for eq_id in equipment_ids_list],
                 }
                 exercises.append(ExerciseRead(**ex_dict))
         else:
@@ -276,10 +368,16 @@ async def read_exercises(
                     for ex in exercises
                 ]
                 
-                # Single query to get all equipment links for this page
-                equipment_links_stmt = select(ExerciseEquipment).where(
-                    ExerciseEquipment.exercise_id.in_(exercise_ids)
+                # Single query to get all equipment links for this page, joining with Equipment to filter by enabled
+                from ...models.equipment import Equipment
+                equipment_links_stmt = (
+                    select(ExerciseEquipment)
+                    .join(Equipment, ExerciseEquipment.equipment_id == Equipment.id)
+                    .where(ExerciseEquipment.exercise_id.in_(exercise_ids))
                 )
+                # Filter by enabled status for non-admin users
+                if not is_admin:
+                    equipment_links_stmt = equipment_links_stmt.where(Equipment.enabled == True)
                 equipment_result = await db.execute(equipment_links_stmt)
                 all_equipment_links = equipment_result.scalars().all()
                 
@@ -290,14 +388,63 @@ async def read_exercises(
                         equipment_by_exercise[link.exercise_id] = []
                     equipment_by_exercise[link.exercise_id].append(link.equipment_id)
                 
-                # Add equipment_ids to exercises
+                # Fetch muscle group names and equipment names
+                from ...models.muscle_group import MuscleGroup
+                from ...models.equipment import Equipment
+                
+                # Get all unique muscle group IDs from all exercises
+                all_mg_ids = set()
+                for exercise in exercises:
+                    exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
+                    if isinstance(exercise, dict):
+                        all_mg_ids.update(exercise.get("primary_muscle_group_ids", []) or [])
+                        all_mg_ids.update(exercise.get("secondary_muscle_group_ids", []) or [])
+                    else:
+                        all_mg_ids.update(exercise.primary_muscle_group_ids or [])
+                        all_mg_ids.update(exercise.secondary_muscle_group_ids or [])
+                
+                # Batch fetch muscle group names
+                muscle_group_names: dict[int, str] = {}
+                if all_mg_ids:
+                    mg_stmt = select(MuscleGroup).where(MuscleGroup.id.in_(list(all_mg_ids)))
+                    mg_result = await db.execute(mg_stmt)
+                    muscle_groups = mg_result.scalars().all()
+                    muscle_group_names = {mg.id: mg.name for mg in muscle_groups}
+                
+                # Get all unique equipment IDs
+                all_equipment_ids = set()
+                for eq_ids in equipment_by_exercise.values():
+                    all_equipment_ids.update(eq_ids)
+                
+            # Batch fetch equipment names (only enabled equipment for non-admin users)
+            equipment_names_map: dict[int, str] = {}
+            if all_equipment_ids:
+                eq_stmt = select(Equipment).where(Equipment.id.in_(list(all_equipment_ids)))
+                if not is_admin:
+                    eq_stmt = eq_stmt.where(Equipment.enabled == True)
+                eq_result = await db.execute(eq_stmt)
+                equipment_list = eq_result.scalars().all()
+                equipment_names_map = {eq.id: eq.name for eq in equipment_list}
+                
+                # Add equipment_ids, muscle group names, and equipment names to exercises
                 for exercise in exercises:
                     exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
                     equipment_ids_list = equipment_by_exercise.get(exercise_id, [])
+                    
                     if isinstance(exercise, dict):
                         exercise["equipment_ids"] = equipment_ids_list
+                        primary_mg_ids = exercise.get("primary_muscle_group_ids", []) or []
+                        secondary_mg_ids = exercise.get("secondary_muscle_group_ids", []) or []
+                        exercise["primary_muscle_group_names"] = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in primary_mg_ids]
+                        exercise["secondary_muscle_group_names"] = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in secondary_mg_ids]
+                        exercise["equipment_names"] = [equipment_names_map.get(eq_id, f"Equipment {eq_id}") for eq_id in equipment_ids_list]
                     else:
                         exercise.equipment_ids = equipment_ids_list
+                        primary_mg_ids = exercise.primary_muscle_group_ids or []
+                        secondary_mg_ids = exercise.secondary_muscle_group_ids or []
+                        exercise.primary_muscle_group_names = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in primary_mg_ids]
+                        exercise.secondary_muscle_group_names = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in secondary_mg_ids]
+                        exercise.equipment_names = [equipment_names_map.get(eq_id, f"Equipment {eq_id}") for eq_id in equipment_ids_list]
     
     # Calculate has_more
     has_more = (page * items_per_page) < total_count
@@ -335,18 +482,64 @@ async def read_exercise(
         if not enabled:
             raise NotFoundException("Exercise not found")
     
-    # Get equipment IDs
-    equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
-    equipment_ids_list = [
-        link.equipment_id if hasattr(link, "equipment_id") else link["equipment_id"]
-        for link in equipment_links
-    ]
+    # Get equipment IDs, filtering by enabled status for non-admin users
+    from ...models.exercise_equipment import ExerciseEquipment
+    from ...models.equipment import Equipment
     
-    # Add equipment_ids to exercise
+    equipment_links_stmt = (
+        select(ExerciseEquipment)
+        .join(Equipment, ExerciseEquipment.equipment_id == Equipment.id)
+        .where(ExerciseEquipment.exercise_id == exercise_id)
+    )
+    # Filter by enabled status for non-admin users
+    if not is_admin:
+        equipment_links_stmt = equipment_links_stmt.where(Equipment.enabled == True)
+    equipment_result = await db.execute(equipment_links_stmt)
+    equipment_links = equipment_result.scalars().all()
+    equipment_ids_list = [link.equipment_id for link in equipment_links]
+    
+    # Fetch muscle group names and equipment names
+    from ...models.muscle_group import MuscleGroup
+    from ...models.equipment import Equipment
+    
+    # Get muscle group IDs
+    if isinstance(exercise, dict):
+        primary_mg_ids = exercise.get("primary_muscle_group_ids", []) or []
+        secondary_mg_ids = exercise.get("secondary_muscle_group_ids", []) or []
+    else:
+        primary_mg_ids = exercise.primary_muscle_group_ids or []
+        secondary_mg_ids = exercise.secondary_muscle_group_ids or []
+    
+    # Batch fetch muscle group names
+    all_mg_ids = set(primary_mg_ids + secondary_mg_ids)
+    muscle_group_names: dict[int, str] = {}
+    if all_mg_ids:
+        mg_stmt = select(MuscleGroup).where(MuscleGroup.id.in_(list(all_mg_ids)))
+        mg_result = await db.execute(mg_stmt)
+        muscle_groups = mg_result.scalars().all()
+        muscle_group_names = {mg.id: mg.name for mg in muscle_groups}
+    
+    # Batch fetch equipment names (only enabled equipment for non-admin users)
+    equipment_names_map: dict[int, str] = {}
+    if equipment_ids_list:
+        eq_stmt = select(Equipment).where(Equipment.id.in_(equipment_ids_list))
+        if not is_admin:
+            eq_stmt = eq_stmt.where(Equipment.enabled == True)
+        eq_result = await db.execute(eq_stmt)
+        equipment_list = eq_result.scalars().all()
+        equipment_names_map = {eq.id: eq.name for eq in equipment_list}
+    
+    # Add equipment_ids, muscle group names, and equipment names to exercise
     if isinstance(exercise, dict):
         exercise["equipment_ids"] = equipment_ids_list
+        exercise["primary_muscle_group_names"] = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in primary_mg_ids]
+        exercise["secondary_muscle_group_names"] = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in secondary_mg_ids]
+        exercise["equipment_names"] = [equipment_names_map.get(eq_id, f"Equipment {eq_id}") for eq_id in equipment_ids_list]
     else:
         exercise.equipment_ids = equipment_ids_list
+        exercise.primary_muscle_group_names = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in primary_mg_ids]
+        exercise.secondary_muscle_group_names = [muscle_group_names.get(mg_id, f"Group {mg_id}") for mg_id in secondary_mg_ids]
+        exercise.equipment_names = [equipment_names_map.get(eq_id, f"Equipment {eq_id}") for eq_id in equipment_ids_list]
 
     return cast(ExerciseRead, exercise)
 

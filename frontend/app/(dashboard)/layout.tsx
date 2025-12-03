@@ -4,6 +4,7 @@ import { useRequireAuth } from "@/lib/hooks/use-auth";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLogout } from "@/lib/stores/auth-store";
+import Image from "next/image";
 
 export default function DashboardLayout({
   children,
@@ -28,27 +29,36 @@ export default function DashboardLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow">
+    <div className="min-h-screen bg-neutral-50">
+      <nav className="bg-white border-b border-neutral-200 sticky top-0 z-50 backdrop-blur-sm bg-white/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <Link href="/dashboard" className="text-xl font-bold text-gray-900">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-8">
+              <Link href="/dashboard" className="flex items-center space-x-3 group">
+                <div className="relative w-8 h-8">
+                  <Image
+                    src="/images/logo.png"
+                    alt="Lift Tracker"
+                    fill
+                    className="object-contain group-hover:scale-105 transition-transform duration-200"
+                    priority
+                  />
+                </div>
+                <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-accent-600 bg-clip-text text-transparent">
                   Lift Tracker
-                </Link>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                </span>
+              </Link>
+              <div className="hidden md:flex md:space-x-1">
                 {navigation.map((item) => {
                   const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
                   return (
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                      className={`nav-link ${
                         isActive
-                          ? "border-indigo-500 text-gray-900"
-                          : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                          ? "active"
+                          : "text-neutral-600 hover:text-neutral-900"
                       }`}
                     >
                       {item.name}
@@ -58,10 +68,15 @@ export default function DashboardLayout({
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-gray-700 text-sm">Welcome, {user.name}</span>
+              <div className="hidden sm:flex items-center space-x-3">
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-semibold text-sm">
+                  {user.name?.charAt(0).toUpperCase() || "U"}
+                </div>
+                <span className="text-neutral-700 text-sm font-medium">Welcome, {user.name}</span>
+              </div>
               <button
                 onClick={logout}
-                className="text-gray-600 hover:text-gray-900 text-sm font-medium"
+                className="text-neutral-600 hover:text-neutral-900 text-sm font-medium px-3 py-2 rounded-lg hover:bg-neutral-100 transition-colors duration-200"
               >
                 Logout
               </button>
@@ -69,7 +84,7 @@ export default function DashboardLayout({
           </div>
         </div>
       </nav>
-      <main>{children}</main>
+      <main className="min-h-[calc(100vh-4rem)]">{children}</main>
     </div>
   );
 }

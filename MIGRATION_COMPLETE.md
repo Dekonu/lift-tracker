@@ -112,7 +112,7 @@ app/
 
 3. **Start backend:**
    ```bash
-   uvicorn src.app.main:app --reload
+   uv run uvicorn src.app.main:app --reload
    ```
 
 4. **Start frontend:**

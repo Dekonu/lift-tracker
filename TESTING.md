@@ -4,32 +4,32 @@
 
 ### Run All Tests
 ```bash
-pytest
+uv run pytest
 ```
 
 ### Run Tests with Coverage
 ```bash
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src/app --cov-report=html
 ```
 
 ### Run Specific Test File
 ```bash
-pytest tests/test_workout_sessions.py
+uv run pytest tests/test_workout_sessions.py
 ```
 
 ### Run Tests with Verbose Output
 ```bash
-pytest -v
+uv run pytest -v
 ```
 
 ### Run Tests and Stop on First Failure
 ```bash
-pytest -x
+uv run pytest -x
 ```
 
 ### Run Tests Matching a Pattern
 ```bash
-pytest -k "test_create"
+uv run pytest -k "test_create"
 ```
 
 ## Test Structure
@@ -41,7 +41,7 @@ These tests ensure the application can start without errors:
 
 **Run these first to catch import errors:**
 ```bash
-pytest tests/test_model_imports.py tests/test_api_imports.py -v
+uv run pytest tests/test_model_imports.py tests/test_api_imports.py -v
 ```
 
 ### Unit Tests
@@ -53,10 +53,10 @@ pytest tests/test_model_imports.py tests/test_api_imports.py -v
 Before committing, always run:
 ```bash
 # 1. Test imports (catches syntax and import errors)
-pytest tests/test_model_imports.py tests/test_api_imports.py -v
+uv run pytest tests/test_model_imports.py tests/test_api_imports.py -v
 
 # 2. Run all tests
-pytest
+uv run pytest
 
 # 3. Check linting (if configured)
 # flake8 src/
@@ -81,9 +81,9 @@ If you see `TypeError: unsupported operand type(s) for |: 'str' and 'NoneType'`:
 Add to your CI/CD pipeline:
 ```yaml
 - name: Run Import Tests
-  run: pytest tests/test_model_imports.py tests/test_api_imports.py -v
+  run: uv run pytest tests/test_model_imports.py tests/test_api_imports.py -v
 
 - name: Run All Tests
-  run: pytest --cov=src --cov-report=xml
+  run: uv run pytest --cov=src/app --cov-report=xml
 ```
 

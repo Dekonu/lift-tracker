@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...api.dependencies import get_current_user
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import NotFoundException
+from ...core.utils.cache import cache
 from ...crud.crud_program import crud_program
 from ...crud.crud_program_week import crud_program_week
 from ...schemas.program import ProgramCreate, ProgramRead, ProgramUpdate

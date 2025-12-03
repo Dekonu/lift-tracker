@@ -27,6 +27,13 @@ class ExerciseRead(ExerciseBase):
     secondary_muscle_group_ids: list[int] = []
     equipment_ids: list[int] = []
     enabled: bool = True
+    # Additional fields for display (optional, will be populated by API)
+    primary_muscle_group_names: list[str] = Field(default_factory=list)
+    secondary_muscle_group_names: list[str] = Field(default_factory=list)
+    equipment_names: list[str] = Field(default_factory=list)
+    category_id: int | None = None
+    instructions: str | None = None
+    common_mistakes: str | None = None
 
 
 class ExerciseCreate(ExerciseBase):

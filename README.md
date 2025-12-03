@@ -352,22 +352,22 @@ The project includes comprehensive test coverage (>95%) using pytest.
 
 ```sh
 # Run all tests
-pytest
+uv run pytest
 
 # Run import tests first (catches syntax/import errors before running full suite)
-pytest tests/test_model_imports.py tests/test_api_imports.py -v
+uv run pytest tests/test_model_imports.py tests/test_api_imports.py -v
 
 # Run with coverage report
-pytest --cov=src --cov-report=html
+uv run pytest --cov=src/app --cov-report=html
 
 # Run specific test file
-pytest tests/test_workout_sessions.py
+uv run pytest tests/test_workout_sessions.py
 
 # Run tests with verbose output
-pytest -v
+uv run pytest -v
 
 # Run tests and stop on first failure
-pytest -x
+uv run pytest -x
 ```
 
 ### Test Structure
@@ -389,10 +389,10 @@ pytest -x
 Before committing, always run:
 ```sh
 # 1. Test imports (catches syntax and import errors)
-pytest tests/test_model_imports.py tests/test_api_imports.py -v
+uv run pytest tests/test_model_imports.py tests/test_api_imports.py -v
 
 # 2. Run all tests
-pytest
+uv run pytest
 ```
 
 See `TESTING.md` for more detailed testing information.
