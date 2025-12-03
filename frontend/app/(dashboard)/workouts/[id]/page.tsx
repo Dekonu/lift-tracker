@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWorkoutSession, useUpdateWorkoutSession } from "@/lib/hooks/use-workouts";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { format } from "date-fns";
 
 export default function WorkoutExecutionPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const workoutId = parseInt(params.id as string);
   const { data: workout, isLoading } = useWorkoutSession(workoutId);
   const updateWorkout = useUpdateWorkoutSession();
@@ -64,16 +66,16 @@ export default function WorkoutExecutionPage() {
   const handleAddSet = async (exerciseEntryId: number, setNumber: number) => {
     try {
       await apiClient.post(`/exercise-entry/${exerciseEntryId}/set`, {
-        exercise_entry_id: exerciseEntryId,
         set_number: setNumber,
         weight_kg: null,
         reps: null,
         is_warmup: false,
       });
-      // Refresh workout data
-      window.location.reload();
+      // Refresh workout data using React Query
+      await queryClient.invalidateQueries({ queryKey: ["workout-session", workoutId] });
     } catch (error) {
       console.error("Failed to add set:", error);
+      alert("Failed to add set. Please try again.");
     }
   };
 
@@ -176,7 +178,7 @@ export default function WorkoutExecutionPage() {
                               await apiClient.patch(`/set-entry/${set.id}`, {
                                 weight_kg: parseFloat(e.target.value) || null,
                               });
-                              window.location.reload();
+                              await queryClient.invalidateQueries({ queryKey: ["workout-session", workoutId] });
                             } catch (error) {
                               console.error("Failed to update weight:", error);
                             }
@@ -195,7 +197,7 @@ export default function WorkoutExecutionPage() {
                               await apiClient.patch(`/set-entry/${set.id}`, {
                                 reps: parseInt(e.target.value) || null,
                               });
-                              window.location.reload();
+                              await queryClient.invalidateQueries({ queryKey: ["workout-session", workoutId] });
                             } catch (error) {
                               console.error("Failed to update reps:", error);
                             }
@@ -214,7 +216,7 @@ export default function WorkoutExecutionPage() {
                               await apiClient.patch(`/set-entry/${set.id}`, {
                                 rir: parseInt(e.target.value) || null,
                               });
-                              window.location.reload();
+                              await queryClient.invalidateQueries({ queryKey: ["workout-session", workoutId] });
                             } catch (error) {
                               console.error("Failed to update RIR:", error);
                             }
