@@ -116,40 +116,47 @@ export default function CreateWorkout() {
       // Add exercise entries and sets
       for (let i = 0; i < selectedExercises.length; i++) {
         const exerciseInstance = selectedExercises[i]
-        const entryResponse = await api.post(`/v1/workout-session/${sessionId}/exercise-entry`, {
-          workout_session_id: sessionId,
-          exercise_id: exerciseInstance.exercise_id,
-          order: exerciseInstance.order
-        })
+        
+        try {
+          const entryResponse = await api.post(`/v1/workout-session/${sessionId}/exercise-entry`, {
+            workout_session_id: sessionId,
+            exercise_id: exerciseInstance.exercise_id,
+            order: exerciseInstance.order
+          })
 
-        const exerciseEntryId = entryResponse.data.id
+          const exerciseEntryId = entryResponse.data.id
 
-        // Add sets
-        for (let setIndex = 0; setIndex < exerciseInstance.sets.length; setIndex++) {
-          const set = exerciseInstance.sets[setIndex]
-          // Convert weight to kg if needed
-          let weight_kg: number | null = null
-          if (set.weight_type === 'static') {
-            if (set.unit === 'kg') {
-              weight_kg = set.weight_value
-            } else if (set.unit === 'lbs') {
-              weight_kg = set.weight_value * 0.453592 // Convert lbs to kg
+          // Add sets
+          for (let setIndex = 0; setIndex < exerciseInstance.sets.length; setIndex++) {
+            const set = exerciseInstance.sets[setIndex]
+            // Convert weight to kg if needed
+            let weight_kg: number | null = null
+            if (set.weight_type === 'static') {
+              if (set.unit === 'kg') {
+                weight_kg = set.weight_value
+              } else if (set.unit === 'lbs') {
+                weight_kg = set.weight_value * 0.453592 // Convert lbs to kg
+              }
             }
-          }
 
-          const setEntry = {
-            exercise_entry_id: exerciseEntryId,
-            set_number: setIndex + 1, // 1-indexed
-            weight_kg: weight_kg,
-            reps: set.reps || null,
-            rir: set.rir || null,
-            percentage_of_1rm: set.weight_type === 'percentage' ? set.weight_value : null,
-            rest_seconds: set.rest_time_seconds || null,
-            notes: set.notes || null,
-            is_warmup: false
-          }
+            const setEntry = {
+              exercise_entry_id: exerciseEntryId,
+              set_number: setIndex + 1, // 1-indexed
+              weight_kg: weight_kg,
+              reps: set.reps || null,
+              rir: set.rir || null,
+              percentage_of_1rm: set.weight_type === 'percentage' ? set.weight_value : null,
+              rest_seconds: set.rest_time_seconds || null,
+              notes: set.notes || null,
+              is_warmup: false
+            }
 
-          await api.post(`/v1/exercise-entry/${exerciseEntryId}/set`, setEntry)
+            await api.post(`/v1/exercise-entry/${exerciseEntryId}/set`, setEntry)
+          }
+        } catch (entryErr: any) {
+          // Log the specific error for debugging
+          console.error(`Error adding exercise entry ${i + 1}:`, entryErr)
+          throw new Error(`Failed to add exercise entry: ${entryErr.response?.data?.detail || entryErr.message}`)
         }
       }
 
@@ -158,14 +165,11 @@ export default function CreateWorkout() {
       // Use replace: false to allow the Home component to handle the date parameter
       navigate(`/home?date=${workoutDateStr}`, { replace: false })
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create workout')
+      console.error('Error creating workout:', err)
+      setError(err.message || err.response?.data?.detail || 'Failed to create workout')
     } finally {
       setSaving(false)
     }
-  }
-
-  if (exercisesLoading) {
-    return <div className="container">Loading exercises...</div>
   }
 
   return (
@@ -176,6 +180,12 @@ export default function CreateWorkout() {
           Cancel
         </button>
       </div>
+
+      {exercisesLoading && (
+        <div style={{ marginBottom: '20px', padding: '20px', textAlign: 'center' }}>
+          Loading exercises...
+        </div>
+      )}
 
       {(error || exercisesError) && (
         <div className="error" style={{ marginBottom: '20px' }}>

@@ -196,50 +196,108 @@ async def read_exercises(
             }
             exercises.append(ExerciseRead(**ex_dict))
     else:
-        # Get exercises with pagination (normal case - much faster)
-        exercises_data = await crud_exercises.get_multi(
-            db=db,
-            offset=compute_offset(page, items_per_page),
-            limit=items_per_page,
-            schema_to_select=ExerciseRead,
-            return_total_count=True,
-            **filters,
-        )
-        
-        exercises = exercises_data.get("data", [])
-        total_count = exercises_data.get("total_count", 0)
-        
-        # Batch fetch equipment_ids for all exercises on this page
-        if exercises:
+        # Get exercises with pagination (normal case - optimized for large page sizes)
+        # For large page sizes (e.g., 1000), use direct query for better performance
+        if items_per_page >= 500:
+            from ...models.exercise import Exercise
             from ...models.exercise_equipment import ExerciseEquipment
             
-            exercise_ids = [
-                ex.id if hasattr(ex, "id") else ex["id"] 
-                for ex in exercises
-            ]
+            # Use direct query for better performance with large page sizes
+            stmt = select(Exercise)
+            if not is_admin:
+                stmt = stmt.where(Exercise.enabled == True)
+            stmt = stmt.order_by(Exercise.name).offset(compute_offset(page, items_per_page)).limit(items_per_page)
             
-            # Single query to get all equipment links for this page
-            equipment_links_stmt = select(ExerciseEquipment).where(
-                ExerciseEquipment.exercise_id.in_(exercise_ids)
+            result = await db.execute(stmt)
+            exercise_models = result.scalars().all()
+            
+            # Get total count
+            count_stmt = select(func.count()).select_from(Exercise)
+            if not is_admin:
+                count_stmt = count_stmt.where(Exercise.enabled == True)
+            count_result = await db.execute(count_stmt)
+            total_count = count_result.scalar() or 0
+            
+            # Convert to ExerciseRead schema
+            exercise_ids = [ex.id for ex in exercise_models]
+            exercises = []
+            
+            # Batch fetch equipment_ids for all exercises
+            if exercise_ids:
+                equipment_links_stmt = select(ExerciseEquipment).where(
+                    ExerciseEquipment.exercise_id.in_(exercise_ids)
+                )
+                equipment_result = await db.execute(equipment_links_stmt)
+                all_equipment_links = equipment_result.scalars().all()
+                
+                # Group equipment by exercise_id
+                equipment_by_exercise: dict[int, list[int]] = {}
+                for link in all_equipment_links:
+                    if link.exercise_id not in equipment_by_exercise:
+                        equipment_by_exercise[link.exercise_id] = []
+                    equipment_by_exercise[link.exercise_id].append(link.equipment_id)
+            else:
+                equipment_by_exercise = {}
+            
+            # Convert to ExerciseRead schema
+            for ex in exercise_models:
+                ex_dict = {
+                    "id": ex.id,
+                    "name": ex.name,
+                    "primary_muscle_group_ids": ex.primary_muscle_group_ids or [],
+                    "secondary_muscle_group_ids": ex.secondary_muscle_group_ids or [],
+                    "enabled": ex.enabled,
+                    "category_id": ex.category_id,
+                    "instructions": ex.instructions,
+                    "common_mistakes": ex.common_mistakes,
+                    "equipment_ids": equipment_by_exercise.get(ex.id, []),
+                }
+                exercises.append(ExerciseRead(**ex_dict))
+        else:
+            # Use CRUD for smaller page sizes (default behavior)
+            exercises_data = await crud_exercises.get_multi(
+                db=db,
+                offset=compute_offset(page, items_per_page),
+                limit=items_per_page,
+                schema_to_select=ExerciseRead,
+                return_total_count=True,
+                **filters,
             )
-            equipment_result = await db.execute(equipment_links_stmt)
-            all_equipment_links = equipment_result.scalars().all()
             
-            # Group equipment by exercise_id
-            equipment_by_exercise: dict[int, list[int]] = {}
-            for link in all_equipment_links:
-                if link.exercise_id not in equipment_by_exercise:
-                    equipment_by_exercise[link.exercise_id] = []
-                equipment_by_exercise[link.exercise_id].append(link.equipment_id)
+            exercises = exercises_data.get("data", [])
+            total_count = exercises_data.get("total_count", 0)
             
-            # Add equipment_ids to exercises
-            for exercise in exercises:
-                exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
-                equipment_ids_list = equipment_by_exercise.get(exercise_id, [])
-                if isinstance(exercise, dict):
-                    exercise["equipment_ids"] = equipment_ids_list
-                else:
-                    exercise.equipment_ids = equipment_ids_list
+            # Batch fetch equipment_ids for all exercises on this page
+            if exercises:
+                from ...models.exercise_equipment import ExerciseEquipment
+                
+                exercise_ids = [
+                    ex.id if hasattr(ex, "id") else ex["id"] 
+                    for ex in exercises
+                ]
+                
+                # Single query to get all equipment links for this page
+                equipment_links_stmt = select(ExerciseEquipment).where(
+                    ExerciseEquipment.exercise_id.in_(exercise_ids)
+                )
+                equipment_result = await db.execute(equipment_links_stmt)
+                all_equipment_links = equipment_result.scalars().all()
+                
+                # Group equipment by exercise_id
+                equipment_by_exercise: dict[int, list[int]] = {}
+                for link in all_equipment_links:
+                    if link.exercise_id not in equipment_by_exercise:
+                        equipment_by_exercise[link.exercise_id] = []
+                    equipment_by_exercise[link.exercise_id].append(link.equipment_id)
+                
+                # Add equipment_ids to exercises
+                for exercise in exercises:
+                    exercise_id = exercise.id if hasattr(exercise, "id") else exercise["id"]
+                    equipment_ids_list = equipment_by_exercise.get(exercise_id, [])
+                    if isinstance(exercise, dict):
+                        exercise["equipment_ids"] = equipment_ids_list
+                    else:
+                        exercise.equipment_ids = equipment_ids_list
     
     # Calculate has_more
     has_more = (page * items_per_page) < total_count

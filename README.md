@@ -352,21 +352,50 @@ The project includes comprehensive test coverage (>95%) using pytest.
 
 ```sh
 # Run all tests
-uv run pytest
+pytest
+
+# Run import tests first (catches syntax/import errors before running full suite)
+pytest tests/test_model_imports.py tests/test_api_imports.py -v
 
 # Run with coverage report
-uv run pytest --cov=src/app --cov-report=html
+pytest --cov=src --cov-report=html
 
 # Run specific test file
-uv run pytest tests/test_workouts.py
+pytest tests/test_workout_sessions.py
+
+# Run tests with verbose output
+pytest -v
+
+# Run tests and stop on first failure
+pytest -x
 ```
 
 ### Test Structure
 
+**Critical Import Tests (run these first):**
+- `tests/test_model_imports.py` - Tests all models and schemas can be imported (catches dataclass field ordering errors)
+- `tests/test_api_imports.py` - Tests all API routers can be imported (catches syntax errors)
+
+**Unit Tests:**
+- `tests/test_workout_sessions.py` - Workout session API endpoint tests
+- `tests/test_scheduled_workouts.py` - Scheduled workout API endpoint tests
 - `tests/test_muscle_groups.py` - Muscle group endpoint tests
 - `tests/test_exercises.py` - Exercise endpoint tests
 - `tests/test_workouts.py` - Workout endpoint tests
 - `tests/test_user.py` - User authentication tests
+
+### Pre-commit Testing
+
+Before committing, always run:
+```sh
+# 1. Test imports (catches syntax and import errors)
+pytest tests/test_model_imports.py tests/test_api_imports.py -v
+
+# 2. Run all tests
+pytest
+```
+
+See `TESTING.md` for more detailed testing information.
 
 ---
 

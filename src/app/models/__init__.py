@@ -20,5 +20,6 @@ from .user_relationship import RelationshipType, UserRelationship
 from .workout import Workout
 from .workout_session import WorkoutSession
 from .workout_template import WorkoutTemplate
+from .scheduled_workout import ScheduledWorkout
 from .exercise_entry import ExerciseEntry
 from .set_entry import SetEntry

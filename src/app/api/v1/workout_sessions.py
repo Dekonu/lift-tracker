@@ -211,6 +211,16 @@ async def get_workout_session_with_relations(db: AsyncSession, session_id: int, 
     result = await db.execute(stmt)
     exercise_entries = result.scalars().all()
 
+    # Fetch exercise names for all exercise IDs
+    exercise_ids = [ee.exercise_id for ee in exercise_entries]
+    exercise_names = {}
+    if exercise_ids:
+        from ...models.exercise import Exercise
+        exercise_stmt = select(Exercise).where(Exercise.id.in_(exercise_ids))
+        exercise_result = await db.execute(exercise_stmt)
+        exercises = exercise_result.scalars().all()
+        exercise_names = {ex.id: ex.name for ex in exercises}
+    
     # Convert to schema format
     exercise_entry_reads = []
     for ee in exercise_entries:
@@ -242,14 +252,17 @@ async def get_workout_session_with_relations(db: AsyncSession, session_id: int, 
             "order": ee.order,
             "notes": ee.notes,
             "created_at": ee.created_at if hasattr(ee, "created_at") else None,
+            "exercise_name": exercise_names.get(ee.exercise_id, "Unknown Exercise"),  # Add exercise name
         }
         entry_read = ExerciseEntryRead(**ee_dict)
         # Add sets to the entry
         if isinstance(entry_read, dict):
             entry_read["sets"] = sets_data
+            entry_read["exercise_name"] = exercise_names.get(ee.exercise_id, "Unknown Exercise")
         else:
             entry_read_dict = entry_read.model_dump() if hasattr(entry_read, "model_dump") else dict(entry_read)
             entry_read_dict["sets"] = sets_data
+            entry_read_dict["exercise_name"] = exercise_names.get(ee.exercise_id, "Unknown Exercise")
             entry_read = ExerciseEntryRead(**entry_read_dict)
         exercise_entry_reads.append(entry_read)
 
@@ -483,19 +496,19 @@ async def update_workout_session(
         total_volume = 0.0
         total_sets = 0
         
-        for entry in entries:
-            entry_id = entry.id if hasattr(entry, "id") else entry["id"]
-            sets_data = await crud_set_entry.get_multi(
-                db=db,
-                offset=0,
-                limit=1000,
-                exercise_entry_id=entry_id,
+        # Use direct query to avoid cartesian product from relationship loading
+        entry_ids = [entry.id if hasattr(entry, "id") else entry["id"] for entry in entries]
+        if entry_ids:
+            stmt = (
+                select(SetEntry)
+                .where(SetEntry.exercise_entry_id.in_(entry_ids))
             )
-            sets = sets_data.get("data", [])
+            result = await db.execute(stmt)
+            all_sets = result.scalars().all()
             
-            for set_obj in sets:
-                weight = set_obj.weight_kg if hasattr(set_obj, "weight_kg") else set_obj.get("weight_kg", 0)
-                reps = set_obj.reps if hasattr(set_obj, "reps") else set_obj.get("reps", 0)
+            for set_obj in all_sets:
+                weight = set_obj.weight_kg if hasattr(set_obj, "weight_kg") else 0
+                reps = set_obj.reps if hasattr(set_obj, "reps") else 0
                 if weight and reps:
                     total_volume += weight * reps
                 total_sets += 1
@@ -673,13 +686,46 @@ async def get_sets_for_entry(
     if session is None:
         raise NotFoundException("Exercise entry not found or access denied")
     
-    sets_data = await crud_set_entry.get_multi(
-        db=db,
-        offset=compute_offset(page, items_per_page),
-        limit=items_per_page,
-        schema_to_select=SetEntryRead,
-        exercise_entry_id=entry_id,
+    # Use direct query to avoid cartesian product from relationship loading
+    stmt = (
+        select(SetEntry)
+        .where(SetEntry.exercise_entry_id == entry_id)
+        .order_by(SetEntry.set_number)
+        .offset(compute_offset(page, items_per_page))
+        .limit(items_per_page)
     )
+    result = await db.execute(stmt)
+    set_models = result.scalars().all()
+    
+    # Get total count
+    count_stmt = select(func.count()).select_from(SetEntry).where(SetEntry.exercise_entry_id == entry_id)
+    count_result = await db.execute(count_stmt)
+    total_count = count_result.scalar() or 0
+    
+    # Convert to SetEntryRead schema manually to avoid relationship loading
+    sets_list = []
+    for s in set_models:
+        set_dict = {
+            "id": s.id,
+            "exercise_entry_id": s.exercise_entry_id,
+            "set_number": s.set_number,
+            "weight_kg": s.weight_kg,
+            "reps": s.reps,
+            "rir": s.rir,
+            "rpe": s.rpe,
+            "percentage_of_1rm": s.percentage_of_1rm,
+            "rest_seconds": s.rest_seconds,
+            "tempo": s.tempo,
+            "notes": s.notes,
+            "is_warmup": s.is_warmup,
+            "created_at": s.created_at if hasattr(s, "created_at") else None,
+        }
+        sets_list.append(SetEntryRead(**set_dict))
+    
+    sets_data = {
+        "data": sets_list,
+        "count": total_count
+    }
     
     return paginated_response(crud_data=sets_data, page=page, items_per_page=items_per_page)
 

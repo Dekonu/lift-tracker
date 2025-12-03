@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import api from '../services/api'
+import { useAuth } from './AuthContext'
 
 interface Exercise {
   id: number
@@ -19,18 +20,18 @@ interface ExercisesContextType {
 const ExercisesContext = createContext<ExercisesContextType | undefined>(undefined)
 
 export function ExercisesProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth()
   const [exercises, setExercises] = useState<Exercise[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const fetchExercises = async () => {
     try {
       setLoading(true)
       setError(null)
-      // Fetch exercises with pagination - get first 500 for initial load
-      // Users can search/filter to find specific exercises
+      // Fetch all exercises (up to 1000) - since total is under 1000, fetch all at once
       // Only fetch enabled exercises for non-admin users (backend handles this)
-      const response = await api.get('/v1/exercises?page=1&items_per_page=500')
+      const response = await api.get('/v1/exercises?page=1&items_per_page=1000')
       const exercisesData = response.data.data || []
       const totalCount = response.data.total_count || 0
       
@@ -40,6 +41,9 @@ export function ExercisesProvider({ children }: { children: ReactNode }) {
       } else if (exercisesData.length === 0 && totalCount > 0) {
         // All exercises are disabled
         setError('No enabled exercises available. Please enable exercises in the admin dashboard.')
+      } else {
+        // Clear error if we have exercises
+        setError(null)
       }
       
       setExercises(exercisesData)
@@ -59,6 +63,7 @@ export function ExercisesProvider({ children }: { children: ReactNode }) {
           // Use cache if less than 1 hour old
           if (Date.now() - cachedData.timestamp < 3600000) {
             setExercises(cachedData.data)
+            setError(null) // Clear error if we have cached data
           }
         } catch {
           // Ignore cache parse errors
@@ -74,6 +79,14 @@ export function ExercisesProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // Only load exercises when user is authenticated
+    if (!user) {
+      setExercises([])
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     // Try to load from cache first for instant display
     const cached = localStorage.getItem('exercises_cache')
     if (cached) {
@@ -89,9 +102,9 @@ export function ExercisesProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    // Always fetch fresh data in background
+    // Always fetch fresh data in background when user logs in
     fetchExercises()
-  }, [])
+  }, [user])
 
   return (
     <ExercisesContext.Provider value={{ exercises, loading, error, refreshExercises }}>

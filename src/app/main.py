@@ -7,6 +7,19 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from .admin.initialize import create_admin_interface
 from .api import router
+
+# Rebuild all Pydantic schemas with forward references
+# This must happen after all imports to ensure forward references are resolved
+try:
+    from .schemas.scheduled_workout import ScheduledWorkoutRead
+    from .schemas.workout_session import WorkoutSessionRead
+    from .schemas.exercise_entry import ExerciseEntryRead
+    
+    ScheduledWorkoutRead.model_rebuild()
+    WorkoutSessionRead.model_rebuild()
+    ExerciseEntryRead.model_rebuild()
+except Exception:
+    pass  # Schemas will be rebuilt when needed
 from .core.config import settings
 from .core.setup import create_application, lifespan_factory
 
