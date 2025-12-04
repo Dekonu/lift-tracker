@@ -15,11 +15,9 @@ from .rate_limit import RateLimit
 from .scheduled_workout import ScheduledWorkout
 from .set import Set, WeightType, WeightUnit
 from .set_entry import SetEntry
-from .sharing_permission import ShareableResourceType, SharingPermission
 from .tier import Tier
 from .user import User
 from .user_profile import ExperienceLevel, Goal, TrainingStyle, UserProfile
-from .user_relationship import RelationshipType, UserRelationship
 from .workout import Workout
 from .workout_session import WorkoutSession
 from .workout_template import WorkoutTemplate
