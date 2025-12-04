@@ -1,7 +1,10 @@
 from datetime import datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from .template_exercise_entry import TemplateExerciseEntryRead
 
 
 class WorkoutTemplateBase(BaseModel):
@@ -13,6 +16,7 @@ class WorkoutTemplateBase(BaseModel):
 
 class WorkoutTemplateCreate(WorkoutTemplateBase):
     user_id: int | None = None
+    template_exercises: list["TemplateExerciseEntryCreate"] = []  # noqa: F821
 
 
 class WorkoutTemplateUpdate(BaseModel):
@@ -25,5 +29,8 @@ class WorkoutTemplateUpdate(BaseModel):
 class WorkoutTemplateRead(WorkoutTemplateBase):
     id: int
     user_id: int | None
+    template_exercises: list["TemplateExerciseEntryRead"] = []  # noqa: F821
     created_at: datetime
     updated_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)

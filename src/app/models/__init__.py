@@ -19,5 +19,7 @@ from .tier import Tier
 from .user import User
 from .user_profile import ExperienceLevel, Goal, TrainingStyle, UserProfile
 from .workout import Workout
+from .template_exercise_entry import TemplateExerciseEntry
+from .template_set_entry import TemplateSetEntry
 from .workout_session import WorkoutSession
 from .workout_template import WorkoutTemplate

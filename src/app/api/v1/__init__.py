@@ -33,6 +33,8 @@ try:
     from ...schemas.program import ProgramRead
     from ...schemas.scheduled_workout import ScheduledWorkoutRead
     from ...schemas.set_entry import SetEntryRead
+    from ...schemas.template_exercise_entry import TemplateExerciseEntryRead
+    from ...schemas.template_set_entry import TemplateSetEntryRead
     from ...schemas.workout_session import WorkoutSessionRead
     from ...schemas.workout_template import WorkoutTemplateRead
 
@@ -54,6 +56,9 @@ try:
         exercise_entry_module.SetEntryRead = SetEntryRead
 
     # Now rebuild schemas with forward references
+    TemplateSetEntryRead.model_rebuild()
+    TemplateExerciseEntryRead.model_rebuild()
+    WorkoutTemplateRead.model_rebuild()
     ScheduledWorkoutRead.model_rebuild()
     WorkoutSessionRead.model_rebuild()
     ExerciseEntryRead.model_rebuild()

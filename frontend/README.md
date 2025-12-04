@@ -1,6 +1,6 @@
 # Lift Tracker Frontend
 
-React + TypeScript frontend for the Lift Tracker application.
+Next.js 14 + TypeScript frontend for the Lift Tracker application.
 
 ## Setup
 
@@ -19,29 +19,53 @@ The frontend will run on `http://localhost:3000` and proxy API requests to `http
 ## Features
 
 - **Login/Signup**: Email-based authentication (no username required)
-- **Home Page**: View all workouts or see "No workouts recorded" message
-- **Create Workout**: Build workouts by selecting exercises and adding sets with:
-  - Weight value and type (static or percentage of 1RM)
-  - Unit (lbs or kg)
-  - Rest time
-  - RIR (Reps in Reserve)
-  - Notes
+- **Dashboard**: View workout statistics and upcoming workouts
+- **Calendar**: Schedule and manage workouts
+- **Workouts**: Create, edit, and track workout sessions
+- **Exercises**: Browse and search exercise library
+- **Programs**: Create and manage training programs
+- **Analytics**: View workout analytics and progress
 
 ## Project Structure
 
 ```
 frontend/
-├── src/
-│   ├── contexts/       # React context for authentication
-│   ├── pages/         # Page components (Login, Signup, Home, CreateWorkout)
-│   ├── services/      # API service layer
-│   ├── App.tsx        # Main app component with routing
-│   └── main.tsx       # Entry point
-├── package.json
-└── vite.config.ts
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # Public routes (login, signup)
+│   ├── (dashboard)/       # Protected routes (dashboard, workouts, etc.)
+│   ├── layout.tsx         # Root layout
+│   ├── page.tsx           # Home page
+│   └── providers.tsx      # React Query & Auth providers
+├── lib/                    # Shared utilities
+│   ├── api/               # API client
+│   ├── hooks/             # React Query hooks
+│   └── stores/            # Zustand stores
+├── tests/                  # Test files
+│   ├── unit/              # Unit tests
+│   ├── integration/       # Integration tests
+│   └── e2e/               # E2E tests (Playwright)
+├── public/                 # Static assets
+├── next.config.js         # Next.js configuration
+└── package.json
 ```
 
 ## Environment
 
-Make sure the backend API is running on `http://localhost:8000` or update the proxy configuration in `vite.config.ts`.
+Make sure the backend API is running on `http://localhost:8000` or update the proxy configuration in `next.config.js`.
+
+## Testing
+
+```bash
+# Run unit tests
+npm run test:unit
+
+# Run integration tests
+npm run test:integration
+
+# Run E2E tests
+npm run test:e2e
+
+# Run all tests with coverage
+npm run test:coverage
+```
 

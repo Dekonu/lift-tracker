@@ -2,12 +2,21 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastcrud.paginated import PaginatedListResponse, compute_offset
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ...api.dependencies import get_current_user, get_optional_user
 from ...core.db.database import async_get_db
 from ...core.exceptions.http_exceptions import NotFoundException
+from ...crud.crud_template_exercise_entry import crud_template_exercise_entry
+from ...crud.crud_template_set_entry import crud_template_set_entry
 from ...crud.crud_workout_template import crud_workout_template
+from ...models.template_exercise_entry import TemplateExerciseEntry
+from ...models.template_set_entry import TemplateSetEntry
+from ...models.workout_template import WorkoutTemplate
+from ...schemas.template_exercise_entry import TemplateExerciseEntryCreate
+from ...schemas.template_set_entry import TemplateSetEntryCreate
 from ...schemas.workout_template import WorkoutTemplateCreate, WorkoutTemplateRead, WorkoutTemplateUpdate
 
 router = APIRouter(tags=["workout-templates"])
@@ -20,19 +29,57 @@ async def create_workout_template(
     db: Annotated[AsyncSession, Depends(async_get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutTemplateRead:
-    """Create a new workout template."""
+    """Create a new workout template with exercises and sets."""
     # Set user_id if not provided
-    if template.user_id is None:
-        template.user_id = current_user["id"]
-    elif template.user_id != current_user["id"]:
+    template_dict = template.model_dump(exclude={"template_exercises"})
+    if template_dict.get("user_id") is None:
+        template_dict["user_id"] = current_user["id"]
+    elif template_dict.get("user_id") != current_user["id"]:
         raise NotFoundException("Cannot create template for another user")
 
-    created = await crud_workout_template.create(db=db, object=template)
+    # Create the template
+    template_create = WorkoutTemplateCreate(**template_dict)
+    created_template = await crud_workout_template.create(db=db, object=template_create)
+    await db.flush()
+
+    # Create template exercises and sets
+    template_exercises_data = template.template_exercises or []
+    for exercise_idx, exercise_data in enumerate(template_exercises_data):
+        exercise_dict = exercise_data.model_dump(exclude={"template_sets"})
+        exercise_dict["workout_template_id"] = created_template.id
+        exercise_dict["order"] = exercise_data.order if exercise_data.order is not None else exercise_idx
+
+        exercise_create = TemplateExerciseEntryCreate(**exercise_dict)
+        created_exercise = await crud_template_exercise_entry.create(db=db, object=exercise_create)
+        await db.flush()
+
+        # Create sets for this exercise
+        sets_data = exercise_data.template_sets or []
+        for set_idx, set_data in enumerate(sets_data):
+            set_dict = set_data.model_dump()
+            set_dict["template_exercise_entry_id"] = created_exercise.id
+            set_dict["set_number"] = set_data.set_number if set_data.set_number else (set_idx + 1)
+
+            set_create = TemplateSetEntryCreate(**set_dict)
+            await crud_template_set_entry.create(db=db, object=set_create)
+
     await db.commit()
 
-    if isinstance(created, dict):
-        return WorkoutTemplateRead(**created)
-    return WorkoutTemplateRead.model_validate(created)
+    # Fetch the complete template with relationships
+    stmt = (
+        select(WorkoutTemplate)
+        .where(WorkoutTemplate.id == created_template.id)
+        .options(
+            selectinload(WorkoutTemplate.template_exercises).selectinload(TemplateExerciseEntry.template_sets)
+        )
+    )
+    result = await db.execute(stmt)
+    full_template = result.scalar_one_or_none()
+
+    if full_template is None:
+        raise NotFoundException("Created template not found")
+
+    return WorkoutTemplateRead.model_validate(full_template)
 
 
 @router.get("/workout-templates", response_model=PaginatedListResponse[WorkoutTemplateRead])
@@ -44,30 +91,43 @@ async def get_workout_templates(
     page: int = 1,
     items_per_page: int = 20,
 ) -> dict[str, Any]:
-    """Get workout templates (user's own and public ones)."""
-    user_templates_data = await crud_workout_template.get_multi(
-        db=db,
-        offset=0,
-        limit=10000,
-        schema_to_select=WorkoutTemplateRead,
-        user_id=current_user["id"] if current_user else None,
+    """Get workout templates (user's own and public ones) with exercises and sets."""
+    # Build query for user templates
+    user_id = current_user["id"] if current_user else None
+    conditions = []
+    if user_id:
+        conditions.append(WorkoutTemplate.user_id == user_id)
+
+    # Get user templates
+    user_stmt = select(WorkoutTemplate)
+    if conditions:
+        from sqlalchemy import or_
+        user_stmt = user_stmt.where(or_(*conditions))
+    user_stmt = user_stmt.options(
+        selectinload(WorkoutTemplate.template_exercises).selectinload(TemplateExerciseEntry.template_sets)
     )
+
+    user_result = await db.execute(user_stmt)
+    user_templates = user_result.scalars().all()
 
     # Get public templates if requested
-    public_templates_data = (
-        await crud_workout_template.get_multi(
-            db=db,
-            offset=0,
-            limit=10000,
-            schema_to_select=WorkoutTemplateRead,
-            is_public=True,
+    public_templates = []
+    if include_public:
+        public_stmt = (
+            select(WorkoutTemplate)
+            .where(WorkoutTemplate.is_public == True)  # noqa: E712
+            .options(
+                selectinload(WorkoutTemplate.template_exercises).selectinload(TemplateExerciseEntry.template_sets)
+            )
         )
-        if include_public
-        else {"data": []}
-    )
+        if user_id:
+            # Exclude user's own templates from public list (already in user_templates)
+            public_stmt = public_stmt.where(WorkoutTemplate.user_id != user_id)
+        public_result = await db.execute(public_stmt)
+        public_templates = public_result.scalars().all()
 
     # Combine and paginate
-    all_templates = user_templates_data.get("data", []) + public_templates_data.get("data", [])
+    all_templates = list(user_templates) + list(public_templates)
     total_count = len(all_templates)
 
     start = compute_offset(page, items_per_page)
@@ -75,8 +135,11 @@ async def get_workout_templates(
     paginated_templates = all_templates[start:end]
     has_more = end < total_count
 
+    # Convert to read models
+    templates_data = [WorkoutTemplateRead.model_validate(t) for t in paginated_templates]
+
     return {
-        "data": paginated_templates,
+        "data": templates_data,
         "total_count": total_count,
         "has_more": has_more,
         "page": page,
@@ -91,14 +154,24 @@ async def get_workout_template(
     db: Annotated[AsyncSession, Depends(async_get_db)],
     current_user: Annotated[dict | None, Depends(get_optional_user)] = None,
 ) -> WorkoutTemplateRead:
-    """Get a specific workout template."""
-    template = await crud_workout_template.get(db=db, id=template_id, schema_to_select=WorkoutTemplateRead)
+    """Get a specific workout template with exercises and sets."""
+    # Fetch template with relationships
+    stmt = (
+        select(WorkoutTemplate)
+        .where(WorkoutTemplate.id == template_id)
+        .options(
+            selectinload(WorkoutTemplate.template_exercises).selectinload(TemplateExerciseEntry.template_sets)
+        )
+    )
+    result = await db.execute(stmt)
+    template = result.scalar_one_or_none()
+
     if template is None:
         raise NotFoundException("Workout template not found")
 
     # Check access (must be owner or public)
-    template_user_id = template.user_id if hasattr(template, "user_id") else template.get("user_id")
-    is_public = template.is_public if hasattr(template, "is_public") else template.get("is_public", False)
+    template_user_id = template.user_id
+    is_public = template.is_public
 
     if current_user and template_user_id == current_user["id"]:
         # Owner can access
@@ -107,9 +180,7 @@ async def get_workout_template(
         # Not owner and not public
         raise NotFoundException("Workout template not found")
 
-    return (
-        WorkoutTemplateRead(**template) if isinstance(template, dict) else WorkoutTemplateRead.model_validate(template)
-    )
+    return WorkoutTemplateRead.model_validate(template)
 
 
 @router.patch("/workout-template/{template_id}", response_model=WorkoutTemplateRead)
@@ -121,11 +192,15 @@ async def update_workout_template(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutTemplateRead:
     """Update a workout template (only owner can update)."""
-    existing = await crud_workout_template.get(db=db, id=template_id)
+    # Fetch template to check ownership
+    stmt = select(WorkoutTemplate).where(WorkoutTemplate.id == template_id)
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
     if existing is None:
         raise NotFoundException("Workout template not found")
 
-    existing_user_id = existing.user_id if hasattr(existing, "user_id") else existing.get("user_id")
+    existing_user_id = existing.user_id
     if existing_user_id != current_user["id"]:
         raise NotFoundException("Cannot update template owned by another user")
 
@@ -134,8 +209,21 @@ async def update_workout_template(
         await crud_workout_template.update(db=db, object=update_data, id=template_id)
         await db.commit()
 
-    updated = await crud_workout_template.get(db=db, id=template_id, schema_to_select=WorkoutTemplateRead)
-    return WorkoutTemplateRead(**updated) if isinstance(updated, dict) else WorkoutTemplateRead.model_validate(updated)
+    # Fetch updated template with relationships
+    stmt = (
+        select(WorkoutTemplate)
+        .where(WorkoutTemplate.id == template_id)
+        .options(
+            selectinload(WorkoutTemplate.template_exercises).selectinload(TemplateExerciseEntry.template_sets)
+        )
+    )
+    result = await db.execute(stmt)
+    updated = result.scalar_one_or_none()
+
+    if updated is None:
+        raise NotFoundException("Updated template not found")
+
+    return WorkoutTemplateRead.model_validate(updated)
 
 
 @router.delete("/workout-template/{template_id}")

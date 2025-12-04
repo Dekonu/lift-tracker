@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..core.db.database import Base
 
@@ -23,3 +23,12 @@ class WorkoutTemplate(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default_factory=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+    # Relationships
+    template_exercises: Mapped[list["TemplateExerciseEntry"]] = relationship(  # noqa: F821
+        "TemplateExerciseEntry",
+        back_populates="workout_template",
+        cascade="all, delete-orphan",
+        order_by="TemplateExerciseEntry.order",
+        init=False,
+    )

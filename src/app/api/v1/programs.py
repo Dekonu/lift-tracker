@@ -10,7 +10,7 @@ from ...core.exceptions.http_exceptions import NotFoundException
 from ...crud.crud_program import crud_program
 from ...crud.crud_program_week import crud_program_week
 from ...schemas.program import ProgramCreate, ProgramRead, ProgramUpdate
-from ...schemas.program_week import ProgramWeekCreate, ProgramWeekRead
+from ...schemas.program_week import ProgramWeekCreate, ProgramWeekRead, ProgramWeekUpdate
 
 router = APIRouter(tags=["programs"])
 
@@ -158,6 +158,46 @@ async def add_week_to_program(
         raise NotFoundException("Created program week not found")
 
     return ProgramWeekRead(**week_read) if isinstance(week_read, dict) else ProgramWeekRead.model_validate(week_read)
+
+
+@router.patch("/program/{program_id}/week/{week_id}", response_model=ProgramWeekRead)
+async def update_program_week(
+    request: Request,
+    program_id: int,
+    week_id: int,
+    week_update: ProgramWeekUpdate,
+    db: Annotated[AsyncSession, Depends(async_get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> ProgramWeekRead:
+    """Update a program week."""
+    # Verify program exists and belongs to user
+    program = await crud_program.get(db=db, id=program_id, user_id=current_user["id"])
+    if program is None:
+        raise NotFoundException("Program not found")
+
+    # Verify week exists and belongs to program
+    week = await crud_program_week.get(db=db, id=week_id, program_id=program_id)
+    if week is None:
+        raise NotFoundException("Program week not found")
+
+    update_dict = week_update.model_dump(exclude_unset=True)
+    await crud_program_week.update(db=db, object=update_dict, id=week_id)
+    await db.commit()
+
+    week_read = await crud_program_week.get(
+        db=db,
+        id=week_id,
+        schema_to_select=ProgramWeekRead,
+        return_as_model=True,
+    )
+    if week_read is None:
+        raise NotFoundException("Updated program week not found")
+
+    return (
+        ProgramWeekRead(**week_read)
+        if isinstance(week_read, dict)
+        else ProgramWeekRead.model_validate(week_read)
+    )
 
 
 @router.patch("/program/{program_id}", response_model=ProgramRead)

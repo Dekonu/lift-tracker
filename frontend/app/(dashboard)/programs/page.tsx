@@ -5,10 +5,12 @@ import { usePrograms, useCreateProgram, useScheduleProgram, useWorkoutTemplates 
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import Link from "next/link";
+import ProgramWeekEditor from "./components/ProgramWeekEditor";
 
 export default function ProgramsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<number | null>(null);
+  const [editingProgram, setEditingProgram] = useState<number | null>(null);
   const { data: programs = [], isLoading } = usePrograms();
   const { data: templates = [] } = useWorkoutTemplates();
   const createProgram = useCreateProgram();
@@ -218,6 +220,12 @@ export default function ProgramsPage() {
                         View Details
                       </button>
                       <button
+                        onClick={() => setEditingProgram(program.id)}
+                        className="flex-1 btn-secondary text-sm"
+                      >
+                        Edit Weeks
+                      </button>
+                      <button
                         onClick={() => handleScheduleProgram(program.id)}
                         className="flex-1 btn-primary text-sm"
                       >
@@ -300,7 +308,18 @@ export default function ProgramsPage() {
               </div>
               <div className="space-y-4">
                 {programWeeks.length === 0 ? (
-                  <p className="text-neutral-500 text-center py-8">No weeks defined for this program.</p>
+                  <div className="text-center py-8">
+                    <p className="text-neutral-500 mb-4">No weeks defined for this program.</p>
+                    <button
+                      onClick={() => {
+                        setSelectedProgram(null);
+                        setEditingProgram(selectedProgram);
+                      }}
+                      className="btn-primary"
+                    >
+                      Add Workout Templates
+                    </button>
+                  </div>
                 ) : (
                   programWeeks.map((week: any, index: number) => (
                     <div key={week.id} className="card p-4">
@@ -320,6 +339,17 @@ export default function ProgramsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Program Week Editor */}
+        {editingProgram && (
+          <ProgramWeekEditor
+            programId={editingProgram}
+            durationWeeks={programs.find((p: any) => p.id === editingProgram)?.duration_weeks || 4}
+            daysPerWeek={programs.find((p: any) => p.id === editingProgram)?.days_per_week || 3}
+            periodizationType={programs.find((p: any) => p.id === editingProgram)?.periodization_type || "linear"}
+            onClose={() => setEditingProgram(null)}
+          />
         )}
       </div>
     </div>
