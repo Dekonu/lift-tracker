@@ -398,8 +398,7 @@ async def update_set(
     if workout_user_id != current_user["id"]:
         raise ForbiddenException("You do not have permission to modify this set")
 
-    set_update = SetUpdate(**values)
-    await crud_sets.update(db=db, object=set_update, id=set_id)
+    await crud_sets.update(db=db, object=values, id=set_id)
     return {"message": "Set updated"}
 
 
