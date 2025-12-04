@@ -5,4 +5,3 @@ from ..schemas.program_week import ProgramWeekCreate, ProgramWeekRead, ProgramWe
 
 CRUDProgramWeek = FastCRUD[ProgramWeek, ProgramWeekCreate, ProgramWeekUpdate, ProgramWeekUpdate, dict, ProgramWeekRead]
 crud_program_week = CRUDProgramWeek(ProgramWeek)
-

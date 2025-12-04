@@ -28,7 +28,6 @@ class ExerciseEntryRead(ExerciseEntryBase):
     id: int
     workout_session_id: int
     created_at: datetime
-    sets: list["SetEntryRead"] = []
+    sets: list[SetEntryRead] = []
 
     model_config = ConfigDict(arbitrary_types_allowed=True, from_attributes=True)
-

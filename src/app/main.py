@@ -12,33 +12,33 @@ from .api import router
 # This must happen after all imports to ensure forward references are resolved
 try:
     # Import forward reference schemas first
-    from .schemas.workout_template import WorkoutTemplateRead
-    from .schemas.program import ProgramRead
-    from .schemas.workout_session import WorkoutSessionRead
-    from .schemas.exercise_entry import ExerciseEntryRead
-    from .schemas.set_entry import SetEntryRead
-    from .schemas.scheduled_workout import ScheduledWorkoutRead
-    
     # Import sys to update module namespaces
     import sys
-    
+
+    from .schemas.exercise_entry import ExerciseEntryRead
+    from .schemas.program import ProgramRead
+    from .schemas.scheduled_workout import ScheduledWorkoutRead
+    from .schemas.set_entry import SetEntryRead
+    from .schemas.workout_session import WorkoutSessionRead
+    from .schemas.workout_template import WorkoutTemplateRead
+
     # Update module namespaces with forward references so Pydantic can resolve them
     # Pydantic looks for forward references in the module where the model is defined
-    scheduled_workout_module = sys.modules.get('src.app.schemas.scheduled_workout')
-    workout_session_module = sys.modules.get('src.app.schemas.workout_session')
-    exercise_entry_module = sys.modules.get('src.app.schemas.exercise_entry')
-    
+    scheduled_workout_module = sys.modules.get("src.app.schemas.scheduled_workout")
+    workout_session_module = sys.modules.get("src.app.schemas.workout_session")
+    exercise_entry_module = sys.modules.get("src.app.schemas.exercise_entry")
+
     if scheduled_workout_module:
         scheduled_workout_module.WorkoutTemplateRead = WorkoutTemplateRead
         scheduled_workout_module.ProgramRead = ProgramRead
         scheduled_workout_module.WorkoutSessionRead = WorkoutSessionRead
-    
+
     if workout_session_module:
         workout_session_module.ExerciseEntryRead = ExerciseEntryRead
-    
+
     if exercise_entry_module:
         exercise_entry_module.SetEntryRead = SetEntryRead
-    
+
     # Now rebuild schemas with forward references
     ScheduledWorkoutRead.model_rebuild()
     WorkoutSessionRead.model_rebuild()
@@ -66,6 +66,7 @@ async def lifespan_with_admin(app: FastAPI) -> AsyncGenerator[None, None]:
                 await admin.initialize()
             except Exception as e:
                 import logging
+
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Admin interface initialization failed, continuing without admin: {e}")
 

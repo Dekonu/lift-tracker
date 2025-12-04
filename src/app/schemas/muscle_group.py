@@ -19,4 +19,3 @@ class MuscleGroupUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Annotated[str | None, Field(min_length=1, max_length=50, examples=["Chest"], default=None)]
-

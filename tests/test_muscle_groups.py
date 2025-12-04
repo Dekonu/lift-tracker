@@ -175,4 +175,3 @@ class TestDeleteMuscleGroup:
 
             with pytest.raises(NotFoundException, match="Muscle group not found"):
                 await delete_muscle_group(Mock(), muscle_group_id, mock_db, current_user_dict)
-

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.dependencies import get_current_superuser, get_current_user
 from ...core.db.database import async_get_db
-from ...core.exceptions.http_exceptions import DuplicateValueException, ForbiddenException, NotFoundException
+from ...core.exceptions.http_exceptions import DuplicateValueException, NotFoundException
 from ...core.security import blacklist_token, get_password_hash, oauth2_scheme
 from ...crud.crud_rate_limit import crud_rate_limits
 from ...crud.crud_tier import crud_tiers
@@ -66,7 +66,6 @@ async def read_user(request: Request, user_id: int, db: Annotated[AsyncSession, 
         raise NotFoundException("User not found")
 
     return cast(UserRead, db_user)
-
 
 
 @router.patch("/user/me")

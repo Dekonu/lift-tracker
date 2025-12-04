@@ -1,11 +1,10 @@
 from datetime import datetime
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastcrud.paginated import PaginatedListResponse, compute_offset, paginated_response
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from ...api.dependencies import get_current_user
 from ...core.db.database import async_get_db
@@ -27,6 +26,7 @@ WorkoutSessionRead.model_rebuild()
 
 router = APIRouter(tags=["workout-sessions"])
 
+
 # Define more specific routes first to ensure proper matching
 # POST /workout-session/{session_id}/exercise-entry must come before GET /workout-session/{session_id}
 @router.post("/workout-session/{session_id}/exercise-entry", response_model=ExerciseEntryRead, status_code=201)
@@ -39,21 +39,21 @@ async def add_exercise_to_session(
 ) -> ExerciseEntryRead:
     """
     Add an exercise entry to a workout session.
-    
+
     Adds an exercise to a workout session. The exercise must exist in the database and the
     session must belong to the authenticated user.
-    
+
     **Path Parameters:**
     - `session_id` (int): The ID of the workout session.
-    
+
     **Request Body:**
     - `exercise_id` (int, required): The ID of the exercise to add.
     - `order` (int, default=0): The order of this exercise within the workout.
     - `notes` (str, optional): Notes specific to this exercise entry.
-    
+
     **Returns:**
     - `ExerciseEntryRead`: The created exercise entry.
-    
+
     **Raises:**
     - `NotFoundException`: If the session or exercise is not found, or if the session
       doesn't belong to the user.
@@ -62,33 +62,31 @@ async def add_exercise_to_session(
     session = await crud_workout_session.get(db=db, id=session_id, user_id=current_user["id"])
     if session is None:
         raise NotFoundException("Workout session not found")
-    
+
     # Verify exercise exists
     exercise = await crud_exercises.get(db=db, id=entry.exercise_id)
     if exercise is None:
         raise NotFoundException("Exercise not found")
-    
+
     # Set workout_session_id and create Pydantic model
     from ...schemas.exercise_entry import ExerciseEntryCreate
+
     entry_dict = entry.model_dump()
     entry_dict["workout_session_id"] = session_id
     entry_internal = ExerciseEntryCreate(**entry_dict)
-    
+
     created = await crud_exercise_entry.create(db=db, object=entry_internal)
     await db.commit()
     await db.refresh(created)
-    
+
     # Fetch with schema to get proper Pydantic model
     # Use return_as_model=True to get a Pydantic model directly
     entry_read = await crud_exercise_entry.get(
-        db=db, 
-        id=created.id, 
-        schema_to_select=ExerciseEntryRead,
-        return_as_model=True
+        db=db, id=created.id, schema_to_select=ExerciseEntryRead, return_as_model=True
     )
     if entry_read is None:
         raise NotFoundException("Created exercise entry not found")
-    
+
     # If it's already a Pydantic model, return it; otherwise convert manually
     # to avoid accessing relationships (which would trigger lazy loading)
     if isinstance(entry_read, dict):
@@ -106,7 +104,7 @@ async def add_exercise_to_session(
             "order": entry_read.order,
             "notes": entry_read.notes,
             "created_at": entry_read.created_at,
-            "sets": []  # Empty list, sets will be loaded separately if needed
+            "sets": [],  # Empty list, sets will be loaded separately if needed
         }
         return ExerciseEntryRead(**entry_dict)
 
@@ -120,57 +118,56 @@ async def create_workout_session(
 ) -> WorkoutSessionRead:
     """
     Create a new workout session.
-    
+
     Creates a workout session for the authenticated user. The session name is auto-generated
     from the started_at timestamp if not provided. The user_id is automatically set from the
     authenticated user and cannot be overridden.
-    
+
     **Request Body:**
     - `started_at` (datetime, optional): When the workout started. Defaults to current time.
     - `name` (str, optional): Name for the workout. Auto-generated if not provided.
     - `notes` (str, optional): Additional notes about the workout.
     - `workout_template_id` (int, optional): ID of the template used for this session.
-    
+
     **Returns:**
     - `WorkoutSessionRead`: The created workout session with all fields.
-    
+
     **Raises:**
     - `NotFoundException`: If the created session cannot be found after creation.
     """
     # Set user_id from current_user (ignore any user_id in request for security)
     session_dict = session.model_dump(exclude={"user_id"})
     session_dict["user_id"] = current_user["id"]
-    
+
     # Auto-generate name if not provided
     if not session_dict.get("name"):
         from datetime import datetime
+
         started_at = session_dict.get("started_at")
         if isinstance(started_at, str):
-            started_at = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+            started_at = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
         elif isinstance(started_at, datetime):
             pass
         else:
             started_at = datetime.now()
         session_dict["name"] = f"Workout {started_at.strftime('%Y-%m-%d %H:%M')}"
-    
+
     # Create Pydantic model instance for FastCRUD
     from ...schemas.workout_session import WorkoutSessionCreate
+
     session_internal = WorkoutSessionCreate(**session_dict)
     created = await crud_workout_session.create(db=db, object=session_internal)
     await db.commit()
     await db.refresh(created)
-    
+
     # Fetch with schema to get proper Pydantic model
     # Use return_as_model=True to get a Pydantic model directly
     session_read = await crud_workout_session.get(
-        db=db, 
-        id=created.id, 
-        schema_to_select=WorkoutSessionRead,
-        return_as_model=True
+        db=db, id=created.id, schema_to_select=WorkoutSessionRead, return_as_model=True
     )
     if session_read is None:
         raise NotFoundException("Created workout session not found")
-    
+
     # If it's already a Pydantic model, return it; otherwise convert manually
     # to avoid accessing relationships (which would trigger lazy loading)
     if isinstance(session_read, dict):
@@ -194,7 +191,7 @@ async def create_workout_session(
             "total_sets": session_read.total_sets,
             "created_at": session_read.created_at,
             "updated_at": session_read.updated_at,
-            "exercise_entries": []  # Empty list, entries will be loaded separately if needed
+            "exercise_entries": [],  # Empty list, entries will be loaded separately if needed
         }
         return WorkoutSessionRead(**session_dict)
 
@@ -209,22 +206,21 @@ async def get_workout_sessions(
 ) -> dict[str, Any]:
     """
     Get all workout sessions for the current user.
-    
+
     Returns a paginated list of workout sessions belonging to the authenticated user.
     Sessions are ordered by most recent first.
-    
+
     **Query Parameters:**
     - `page` (int, default=1): Page number for pagination.
     - `items_per_page` (int, default=20): Number of items per page.
-    
+
     **Returns:**
     - `PaginatedListResponse[WorkoutSessionRead]`: Paginated list of workout sessions.
     """
     # Fetch sessions without nested relationships to avoid cartesian product
     # We'll load exercise_entries separately when needed (via get_workout_session endpoint)
     # Use a simple query to avoid loading relationships
-    from ...models.workout_session import WorkoutSession
-    
+
     stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == current_user["id"])
@@ -234,12 +230,12 @@ async def get_workout_sessions(
     )
     result = await db.execute(stmt)
     sessions = result.scalars().all()
-    
+
     # Get total count
     count_stmt = select(func.count()).select_from(WorkoutSession).where(WorkoutSession.user_id == current_user["id"])
     count_result = await db.execute(count_stmt)
     total_count = count_result.scalar() or 0
-    
+
     # Convert to WorkoutSessionRead without loading relationships
     sessions_list = []
     for session in sessions:
@@ -256,15 +252,12 @@ async def get_workout_sessions(
             "total_sets": session.total_sets,
             "created_at": session.created_at,
             "updated_at": session.updated_at,
-            "exercise_entries": []  # Empty to avoid cartesian product
+            "exercise_entries": [],  # Empty to avoid cartesian product
         }
         sessions_list.append(WorkoutSessionRead(**session_dict))
-    
-    sessions_data = {
-        "data": sessions_list,
-        "count": total_count
-    }
-    
+
+    sessions_data = {"data": sessions_list, "count": total_count}
+
     return paginated_response(crud_data=sessions_data, page=page, items_per_page=items_per_page)
 
 
@@ -285,11 +278,7 @@ async def get_workout_session_with_relations(db: AsyncSession, session_id: int, 
         return None
 
     # Fetch exercise entries without sets to avoid cartesian product
-    stmt = (
-        select(ExerciseEntry)
-        .where(ExerciseEntry.workout_session_id == session_id)
-        .order_by(ExerciseEntry.order)
-    )
+    stmt = select(ExerciseEntry).where(ExerciseEntry.workout_session_id == session_id).order_by(ExerciseEntry.order)
     result = await db.execute(stmt)
     exercise_entries = result.scalars().all()
 
@@ -298,11 +287,12 @@ async def get_workout_session_with_relations(db: AsyncSession, session_id: int, 
     exercise_names = {}
     if exercise_ids:
         from ...models.exercise import Exercise
+
         exercise_stmt = select(Exercise).where(Exercise.id.in_(exercise_ids))
         exercise_result = await db.execute(exercise_stmt)
         exercises = exercise_result.scalars().all()
         exercise_names = {ex.id: ex.name for ex in exercises}
-    
+
     # Fetch all sets for these entries in a separate query to avoid cartesian product
     entry_ids = [ee.id for ee in exercise_entries]
     sets_by_entry = {}
@@ -318,7 +308,7 @@ async def get_workout_session_with_relations(db: AsyncSession, session_id: int, 
             if s.exercise_entry_id not in sets_by_entry:
                 sets_by_entry[s.exercise_entry_id] = []
             sets_by_entry[s.exercise_entry_id].append(s)
-    
+
     # Convert to schema format
     exercise_entry_reads = []
     for ee in exercise_entries:
@@ -371,11 +361,17 @@ async def get_workout_session_with_relations(db: AsyncSession, session_id: int, 
 
     # Combine session with exercise entries
     if isinstance(session_read, dict):
-        session_read["exercise_entries"] = [ee.model_dump() if hasattr(ee, "model_dump") else dict(ee) for ee in exercise_entry_reads]
+        session_read["exercise_entries"] = [
+            ee.model_dump() if hasattr(ee, "model_dump") else dict(ee)
+            for ee in exercise_entry_reads
+        ]
         return session_read
     else:
         session_dict = session_read.model_dump() if hasattr(session_read, "model_dump") else dict(session_read)
-        session_dict["exercise_entries"] = [ee.model_dump() if hasattr(ee, "model_dump") else dict(ee) for ee in exercise_entry_reads]
+        session_dict["exercise_entries"] = [
+            ee.model_dump() if hasattr(ee, "model_dump") else dict(ee)
+            for ee in exercise_entry_reads
+        ]
         return session_dict
 
 
@@ -390,20 +386,20 @@ async def get_exercise_entries(
 ) -> dict[str, Any]:
     """
     Get all exercise entries for a workout session.
-    
+
     Returns a paginated list of exercise entries for a workout session. Only sessions
     belonging to the authenticated user can be accessed.
-    
+
     **Path Parameters:**
     - `session_id` (int): The ID of the workout session.
-    
+
     **Query Parameters:**
     - `page` (int, default=1): Page number for pagination.
     - `items_per_page` (int, default=50): Number of items per page.
-    
+
     **Returns:**
     - `PaginatedListResponse[ExerciseEntryRead]`: Paginated list of exercise entries.
-    
+
     **Raises:**
     - `NotFoundException`: If the session is not found or doesn't belong to the user.
     """
@@ -411,7 +407,7 @@ async def get_exercise_entries(
     session = await crud_workout_session.get(db=db, id=session_id, user_id=current_user["id"])
     if session is None:
         raise NotFoundException("Workout session not found")
-    
+
     entries_data = await crud_exercise_entry.get_multi(
         db=db,
         offset=compute_offset(page, items_per_page),
@@ -419,7 +415,7 @@ async def get_exercise_entries(
         schema_to_select=ExerciseEntryRead,
         workout_session_id=session_id,
     )
-    
+
     return paginated_response(crud_data=entries_data, page=page, items_per_page=items_per_page)
 
 
@@ -432,23 +428,23 @@ async def get_workout_session(
 ) -> dict[str, Any]:
     """
     Get a specific workout session with all entries and sets.
-    
+
     Retrieves a workout session with all its exercise entries and sets. Only sessions
     belonging to the authenticated user can be accessed.
-    
+
     **Path Parameters:**
     - `session_id` (int): The ID of the workout session to retrieve.
-    
+
     **Returns:**
     - `dict[str, Any]`: The workout session with nested exercise entries and sets.
-    
+
     **Raises:**
     - `NotFoundException`: If the session is not found or doesn't belong to the user.
     """
     session_data = await get_workout_session_with_relations(db=db, session_id=session_id, user_id=current_user["id"])
     if session_data is None:
         raise NotFoundException("Workout session not found")
-    
+
     return session_data
 
 
@@ -462,32 +458,32 @@ async def update_workout_session(
 ) -> WorkoutSessionRead:
     """
     Update a workout session.
-    
+
     Updates a workout session. Only sessions belonging to the authenticated user can be updated.
     If `completed_at` is set, the duration is automatically calculated and total volume/sets are
     recalculated based on all exercise entries and sets.
-    
+
     **Path Parameters:**
     - `session_id` (int): The ID of the workout session to update.
-    
+
     **Request Body:**
     - `name` (str, optional): Updated name for the workout.
     - `notes` (str, optional): Updated notes.
     - `started_at` (datetime, optional): Updated start time.
     - `completed_at` (datetime, optional): When the workout was completed.
-    
+
     **Returns:**
     - `WorkoutSessionRead`: The updated workout session.
-    
+
     **Raises:**
     - `NotFoundException`: If the session is not found or doesn't belong to the user.
     """
     existing = await crud_workout_session.get(db=db, id=session_id, user_id=current_user["id"])
     if existing is None:
         raise NotFoundException("Workout session not found")
-    
+
     update_data = session_update.model_dump(exclude_unset=True)
-    
+
     # Calculate duration if completed_at is set
     if "completed_at" in update_data and update_data["completed_at"]:
         session_obj = await crud_workout_session.get(db=db, id=session_id)
@@ -497,7 +493,7 @@ async def update_workout_session(
             if isinstance(started_at, datetime) and isinstance(completed_at, datetime):
                 duration = int((completed_at - started_at).total_seconds() / 60)
                 update_data["duration_minutes"] = duration
-    
+
     # Calculate total volume and sets
     if update_data.get("completed_at"):
         # Recalculate volume and sets
@@ -508,34 +504,31 @@ async def update_workout_session(
             workout_session_id=session_id,
         )
         entries = exercise_entries.get("data", [])
-        
+
         total_volume = 0.0
         total_sets = 0
-        
+
         # Use direct query to avoid cartesian product from relationship loading
         entry_ids = [entry.id if hasattr(entry, "id") else entry["id"] for entry in entries]
         if entry_ids:
-            stmt = (
-                select(SetEntry)
-                .where(SetEntry.exercise_entry_id.in_(entry_ids))
-            )
+            stmt = select(SetEntry).where(SetEntry.exercise_entry_id.in_(entry_ids))
             result = await db.execute(stmt)
             all_sets = result.scalars().all()
-            
+
             for set_obj in all_sets:
                 weight = set_obj.weight_kg if hasattr(set_obj, "weight_kg") else 0
                 reps = set_obj.reps if hasattr(set_obj, "reps") else 0
                 if weight and reps:
                     total_volume += weight * reps
                 total_sets += 1
-        
+
         update_data["total_volume_kg"] = total_volume
         update_data["total_sets"] = total_sets
-    
+
     if update_data:
         await crud_workout_session.update(db=db, object=update_data, id=session_id)
         await db.commit()
-    
+
     updated = await crud_workout_session.get(db=db, id=session_id, schema_to_select=WorkoutSessionRead)
     return WorkoutSessionRead(**updated) if isinstance(updated, dict) else WorkoutSessionRead.model_validate(updated)
 
@@ -549,26 +542,26 @@ async def delete_workout_session(
 ) -> dict[str, str]:
     """
     Delete a workout session (cascades to entries and sets).
-    
+
     Deletes a workout session and all associated exercise entries and sets. Only sessions
     belonging to the authenticated user can be deleted.
-    
+
     **Path Parameters:**
     - `session_id` (int): The ID of the workout session to delete.
-    
+
     **Returns:**
     - `dict[str, str]`: Success message.
-    
+
     **Raises:**
     - `NotFoundException`: If the session is not found or doesn't belong to the user.
     """
     existing = await crud_workout_session.get(db=db, id=session_id, user_id=current_user["id"])
     if existing is None:
         raise NotFoundException("Workout session not found")
-    
+
     await crud_workout_session.db_delete(db=db, id=session_id)
     await db.commit()
-    
+
     return {"message": "Workout session deleted"}
 
 
@@ -582,13 +575,13 @@ async def add_set_to_entry(
 ) -> SetEntryRead:
     """
     Add a set to an exercise entry.
-    
+
     Adds a set to an exercise entry. The entry must belong to a workout session owned by
     the authenticated user.
-    
+
     **Path Parameters:**
     - `entry_id` (int): The ID of the exercise entry.
-    
+
     **Request Body:**
     - `set_number` (int, required): The set number within the exercise entry.
     - `weight_kg` (float, optional): Weight in kilograms.
@@ -600,10 +593,10 @@ async def add_set_to_entry(
     - `tempo` (str, optional): Tempo notation (e.g., "2-0-1-0").
     - `notes` (str, optional): Notes for this set.
     - `is_warmup` (bool, default=False): Whether this is a warmup set.
-    
+
     **Returns:**
     - `SetEntryRead`: The created set entry.
-    
+
     **Raises:**
     - `NotFoundException`: If the entry is not found or doesn't belong to the user's session.
     """
@@ -611,33 +604,29 @@ async def add_set_to_entry(
     entry = await crud_exercise_entry.get(db=db, id=entry_id)
     if entry is None:
         raise NotFoundException("Exercise entry not found")
-    
+
     entry_session_id = entry.workout_session_id if hasattr(entry, "workout_session_id") else entry["workout_session_id"]
     session = await crud_workout_session.get(db=db, id=entry_session_id, user_id=current_user["id"])
     if session is None:
         raise NotFoundException("Exercise entry not found or access denied")
-    
+
     # Set exercise_entry_id and create Pydantic model
     from ...schemas.set_entry import SetEntryCreate
+
     set_dict = set_entry.model_dump()
     set_dict["exercise_entry_id"] = entry_id
     set_internal = SetEntryCreate(**set_dict)
-    
+
     created = await crud_set_entry.create(db=db, object=set_internal)
     await db.commit()
     await db.refresh(created)
-    
+
     # Fetch with schema to get proper Pydantic model
     # Use return_as_model=True to get a Pydantic model directly
-    set_read = await crud_set_entry.get(
-        db=db, 
-        id=created.id, 
-        schema_to_select=SetEntryRead,
-        return_as_model=True
-    )
+    set_read = await crud_set_entry.get(db=db, id=created.id, schema_to_select=SetEntryRead, return_as_model=True)
     if set_read is None:
         raise NotFoundException("Created set entry not found")
-    
+
     # If it's already a Pydantic model, return it; otherwise convert
     if isinstance(set_read, dict):
         return SetEntryRead(**set_read)
@@ -659,7 +648,7 @@ async def add_set_to_entry(
             "tempo": set_read.tempo,
             "notes": set_read.notes,
             "is_warmup": set_read.is_warmup,
-            "created_at": set_read.created_at
+            "created_at": set_read.created_at,
         }
         return SetEntryRead(**set_dict)
 
@@ -675,20 +664,20 @@ async def get_sets_for_entry(
 ) -> dict[str, Any]:
     """
     Get all sets for an exercise entry.
-    
+
     Returns a paginated list of sets for an exercise entry. The entry must belong to a
     workout session owned by the authenticated user.
-    
+
     **Path Parameters:**
     - `entry_id` (int): The ID of the exercise entry.
-    
+
     **Query Parameters:**
     - `page` (int, default=1): Page number for pagination.
     - `items_per_page` (int, default=50): Number of items per page.
-    
+
     **Returns:**
     - `PaginatedListResponse[SetEntryRead]`: Paginated list of set entries.
-    
+
     **Raises:**
     - `NotFoundException`: If the entry is not found or doesn't belong to the user's session.
     """
@@ -696,12 +685,12 @@ async def get_sets_for_entry(
     entry = await crud_exercise_entry.get(db=db, id=entry_id)
     if entry is None:
         raise NotFoundException("Exercise entry not found")
-    
+
     entry_session_id = entry.workout_session_id if hasattr(entry, "workout_session_id") else entry["workout_session_id"]
     session = await crud_workout_session.get(db=db, id=entry_session_id, user_id=current_user["id"])
     if session is None:
         raise NotFoundException("Exercise entry not found or access denied")
-    
+
     # Use direct query to avoid cartesian product from relationship loading
     stmt = (
         select(SetEntry)
@@ -712,12 +701,12 @@ async def get_sets_for_entry(
     )
     result = await db.execute(stmt)
     set_models = result.scalars().all()
-    
+
     # Get total count
     count_stmt = select(func.count()).select_from(SetEntry).where(SetEntry.exercise_entry_id == entry_id)
     count_result = await db.execute(count_stmt)
     total_count = count_result.scalar() or 0
-    
+
     # Convert to SetEntryRead schema manually to avoid relationship loading
     sets_list = []
     for s in set_models:
@@ -737,11 +726,7 @@ async def get_sets_for_entry(
             "created_at": s.created_at if hasattr(s, "created_at") else None,
         }
         sets_list.append(SetEntryRead(**set_dict))
-    
-    sets_data = {
-        "data": sets_list,
-        "count": total_count
-    }
-    
-    return paginated_response(crud_data=sets_data, page=page, items_per_page=items_per_page)
 
+    sets_data = {"data": sets_list, "count": total_count}
+
+    return paginated_response(crud_data=sets_data, page=page, items_per_page=items_per_page)

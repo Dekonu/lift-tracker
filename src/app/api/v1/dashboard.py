@@ -7,13 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.dependencies import get_current_user
 from ...core.db.database import async_get_db
-from ...crud.crud_exercise_entry import crud_exercise_entry
-from ...crud.crud_set_entry import crud_set_entry
-from ...crud.crud_workout_session import crud_workout_session
-from ...crud.crud_scheduled_workout import crud_scheduled_workout
+from ...models.scheduled_workout import ScheduledWorkout
 from ...models.set_entry import SetEntry
 from ...models.workout_session import WorkoutSession
-from ...models.scheduled_workout import ScheduledWorkout
 
 router = APIRouter(tags=["dashboard"])
 
@@ -27,22 +23,22 @@ async def get_dashboard_stats(
 ) -> dict[str, Any]:
     """
     Get comprehensive dashboard statistics for the current user.
-    
+
     Returns aggregated stats including:
     - Total volume (all time and for period)
     - PRs achieved
     - Training frequency
     - Muscle group distribution
     - Progress trends
-    
+
     **Query Parameters:**
     - `period` (str, default="month"): Time period for stats (week, month, year, all).
-    
+
     **Returns:**
     - `dict`: Dashboard statistics including volume, PRs, frequency, and trends.
     """
     user_id = current_user["id"]
-    
+
     # Calculate date range
     end_date = datetime.now()
     if period == "week":
@@ -53,7 +49,7 @@ async def get_dashboard_stats(
         start_date = end_date - timedelta(days=365)
     else:  # all
         start_date = datetime(2000, 1, 1)  # Far back date
-    
+
     # Get workout sessions in period
     sessions_stmt = (
         select(WorkoutSession)
@@ -64,41 +60,35 @@ async def get_dashboard_stats(
     )
     sessions_result = await db.execute(sessions_stmt)
     sessions = sessions_result.scalars().all()
-    
+
     # Calculate total volume and workout count
     total_volume = 0.0
     workout_count = len(sessions)
     total_sets = 0
-    
+
     session_ids = [s.id for s in sessions]
-    
+
     if session_ids:
         # Get all exercise entries for these sessions
         from ...models.exercise_entry import ExerciseEntry
-        
-        entries_stmt = (
-            select(ExerciseEntry)
-            .where(ExerciseEntry.workout_session_id.in_(session_ids))
-        )
+
+        entries_stmt = select(ExerciseEntry).where(ExerciseEntry.workout_session_id.in_(session_ids))
         entries_result = await db.execute(entries_stmt)
         entries = entries_result.scalars().all()
-        
+
         entry_ids = [e.id for e in entries]
-        
+
         if entry_ids:
             # Get all sets for these entries
-            sets_stmt = (
-                select(SetEntry)
-                .where(SetEntry.exercise_entry_id.in_(entry_ids))
-            )
+            sets_stmt = select(SetEntry).where(SetEntry.exercise_entry_id.in_(entry_ids))
             sets_result = await db.execute(sets_stmt)
             sets = sets_result.scalars().all()
-            
+
             for s in sets:
                 if s.weight_kg and s.reps:
                     total_volume += s.weight_kg * s.reps
                 total_sets += 1
-    
+
     # Get all-time stats
     all_time_stmt = (
         select(func.sum(WorkoutSession.total_volume_kg), func.count(WorkoutSession.id))
@@ -109,7 +99,7 @@ async def get_dashboard_stats(
     all_time_row = all_time_result.first()
     all_time_volume = float(all_time_row[0] or 0)
     all_time_workouts = all_time_row[1] or 0
-    
+
     # Get upcoming scheduled workouts (next 7 days)
     upcoming_start = datetime.now()
     upcoming_end = datetime.now() + timedelta(days=7)
@@ -122,11 +112,11 @@ async def get_dashboard_stats(
     )
     scheduled_result = await db.execute(scheduled_stmt)
     upcoming_workouts = len(scheduled_result.scalars().all())
-    
+
     # Get recent PRs (last 30 days) - simplified version
     # In production, you'd want to track actual PRs in a separate table
     recent_prs = 0  # Placeholder - would need PR tracking logic
-    
+
     # Calculate training frequency (workouts per week)
     if period == "week":
         workouts_per_week = workout_count
@@ -141,11 +131,11 @@ async def get_dashboard_stats(
             workouts_per_week = (all_time_workouts / account_age_days) * 7
         else:
             workouts_per_week = 0
-    
+
     # Get today's workout status
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
-    
+
     today_sessions_stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == user_id)
@@ -154,7 +144,7 @@ async def get_dashboard_stats(
     )
     today_sessions_result = await db.execute(today_sessions_stmt)
     today_sessions = today_sessions_result.scalars().all()
-    
+
     today_workout = None
     if today_sessions:
         today_workout = {
@@ -163,7 +153,7 @@ async def get_dashboard_stats(
             "started_at": today_sessions[0].started_at.isoformat(),
             "completed": today_sessions[0].completed_at is not None,
         }
-    
+
     return {
         "period": period,
         "period_stats": {
@@ -184,4 +174,3 @@ async def get_dashboard_stats(
         },
         "recent_prs": recent_prs,  # Placeholder
     }
-

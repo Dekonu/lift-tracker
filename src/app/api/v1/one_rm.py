@@ -25,23 +25,23 @@ async def create_one_rm(
     # Ensure user_id matches current user
     if one_rm.user_id != current_user["id"]:
         raise NotFoundException("Cannot create 1RM for another user")
-    
+
     # Verify exercise exists
     exercise = await crud_exercises.get(db=db, id=one_rm.exercise_id)
     if exercise is None:
         raise NotFoundException("Exercise not found")
-    
+
     # Check if 1RM already exists for this user/exercise
     existing = await crud_one_rm.get(
         db=db,
         user_id=one_rm.user_id,
         exercise_id=one_rm.exercise_id,
     )
-    
+
     if existing:
         # Update existing
         update_data = one_rm.model_dump(exclude={"user_id", "exercise_id"})
-        updated = await crud_one_rm.update(
+        await crud_one_rm.update(
             db=db,
             object=update_data,
             id=existing.id if hasattr(existing, "id") else existing["id"],
@@ -73,7 +73,7 @@ async def get_one_rms(
     filters = {"user_id": current_user["id"]}
     if exercise_id:
         filters["exercise_id"] = exercise_id
-    
+
     one_rms_data = await crud_one_rm.get_multi(
         db=db,
         offset=compute_offset(page, items_per_page),
@@ -81,7 +81,7 @@ async def get_one_rms(
         schema_to_select=OneRMRead,
         **filters,
     )
-    
+
     return paginated_response(crud_data=one_rms_data, page=page, items_per_page=items_per_page)
 
 
@@ -101,7 +101,7 @@ async def get_one_rm(
     )
     if one_rm is None:
         raise NotFoundException("1RM record not found")
-    
+
     return OneRMRead(**one_rm) if isinstance(one_rm, dict) else OneRMRead.model_validate(one_rm)
 
 
@@ -117,12 +117,12 @@ async def update_one_rm(
     existing = await crud_one_rm.get(db=db, id=one_rm_id, user_id=current_user["id"])
     if existing is None:
         raise NotFoundException("1RM record not found")
-    
+
     update_data = one_rm_update.model_dump(exclude_unset=True)
     if update_data:
         await crud_one_rm.update(db=db, object=update_data, id=one_rm_id)
         await db.commit()
-    
+
     updated = await crud_one_rm.get(db=db, id=one_rm_id, schema_to_select=OneRMRead)
     return OneRMRead(**updated) if isinstance(updated, dict) else OneRMRead.model_validate(updated)
 
@@ -138,9 +138,8 @@ async def delete_one_rm(
     existing = await crud_one_rm.get(db=db, id=one_rm_id, user_id=current_user["id"])
     if existing is None:
         raise NotFoundException("1RM record not found")
-    
+
     await crud_one_rm.db_delete(db=db, id=one_rm_id)
     await db.commit()
-    
-    return {"message": "1RM record deleted"}
 
+    return {"message": "1RM record deleted"}

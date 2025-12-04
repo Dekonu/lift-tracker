@@ -29,4 +29,3 @@ class SharingPermissionRead(SharingPermissionBase):
     owner_user_id: int
     created_at: datetime
     updated_at: datetime | None
-

@@ -1,17 +1,18 @@
 """Simple script to create admin user."""
+
 import asyncio
-import sys
 import os
+import sys
 
 # Add src to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from sqlalchemy import select
+
 from app.core.config import settings
-from app.core.db.database import async_engine, local_session
+from app.core.db.database import local_session
 from app.core.security import get_password_hash
 from app.models.user import User
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def create_admin_user():
@@ -19,11 +20,9 @@ async def create_admin_user():
     async with local_session() as session:
         try:
             # Check if admin user exists
-            result = await session.execute(
-                select(User).where(User.email == settings.ADMIN_EMAIL)
-            )
+            result = await session.execute(select(User).where(User.email == settings.ADMIN_EMAIL))
             existing_user = result.scalar_one_or_none()
-            
+
             if existing_user:
                 print(f"Admin user {settings.ADMIN_EMAIL} already exists.")
                 # Check if it's a superuser
@@ -40,7 +39,7 @@ async def create_admin_user():
                     name=settings.ADMIN_NAME,
                     email=settings.ADMIN_EMAIL,
                     hashed_password=get_password_hash(settings.ADMIN_PASSWORD),
-                    is_superuser=True
+                    is_superuser=True,
                 )
                 session.add(admin_user)
                 await session.commit()
@@ -55,4 +54,3 @@ async def create_admin_user():
 
 if __name__ == "__main__":
     asyncio.run(create_admin_user())
-

@@ -14,7 +14,6 @@ from ...crud.crud_exercise_instance import crud_exercise_instances
 from ...crud.crud_set import crud_sets
 from ...crud.crud_workout import crud_workouts
 from ...models.exercise_instance import ExerciseInstance
-from ...models.set import Set
 from ...schemas.exercise_instance import ExerciseInstanceCreate, ExerciseInstanceCreateInternal, ExerciseInstanceRead
 from ...schemas.set import SetCreate, SetCreateInternal, SetRead, SetUpdate
 from ...schemas.workout import WorkoutCreate, WorkoutCreateInternal, WorkoutRead, WorkoutUpdate
@@ -102,14 +101,11 @@ async def create_workout(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutRead:
     """Create a new workout."""
-    workout_internal = WorkoutCreateInternal(
-        date=workout.date,
-        user_id=current_user["id"]
-    )
+    workout_internal = WorkoutCreateInternal(date=workout.date, user_id=current_user["id"])
     created = await crud_workouts.create(db=db, object=workout_internal)
     await db.commit()
     await db.refresh(created)
-    
+
     workout_read = await get_workout_with_relations(db=db, workout_id=created.id, user_id=current_user["id"])
     if workout_read is None:
         raise NotFoundException("Created workout not found")
@@ -251,9 +247,7 @@ async def create_exercise_instance(
         raise NotFoundException("Exercise not found")
 
     exercise_instance_internal = ExerciseInstanceCreateInternal(
-        exercise_id=exercise_instance.exercise_id,
-        order=exercise_instance.order,
-        workout_id=workout_id
+        exercise_id=exercise_instance.exercise_id, order=exercise_instance.order, workout_id=workout_id
     )
     created = await crud_exercise_instances.create(db=db, object=exercise_instance_internal)
     await db.commit()
@@ -345,7 +339,7 @@ async def create_set(
         rest_time_seconds=set_data.rest_time_seconds,
         rir=set_data.rir,
         notes=set_data.notes,
-        exercise_instance_id=exercise_instance_id
+        exercise_instance_id=exercise_instance_id,
     )
     created = await crud_sets.create(db=db, object=set_internal)
     await db.commit()
@@ -443,4 +437,3 @@ async def delete_set(
 
     await crud_sets.db_delete(db=db, id=set_id)
     return {"message": "Set deleted"}
-

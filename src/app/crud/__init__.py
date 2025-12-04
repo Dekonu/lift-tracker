@@ -12,4 +12,3 @@ from .crud_set import crud_sets
 from .crud_tier import crud_tiers
 from .crud_users import crud_users
 from .crud_workout import crud_workouts
-

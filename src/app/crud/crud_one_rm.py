@@ -5,4 +5,3 @@ from ..schemas.one_rm import OneRMCreate, OneRMRead, OneRMUpdate
 
 CRUDOneRM = FastCRUD[OneRM, OneRMCreate, OneRMUpdate, OneRMUpdate, dict, OneRMRead]
 crud_one_rm = CRUDOneRM(OneRM)
-

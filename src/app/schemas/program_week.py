@@ -26,4 +26,3 @@ class ProgramWeekUpdate(BaseModel):
 
 class ProgramWeekRead(ProgramWeekBase):
     id: int
-

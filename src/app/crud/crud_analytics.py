@@ -11,6 +11,7 @@ from ..schemas.analytics import (
 CRUDVolumeTracking = FastCRUD[VolumeTracking, VolumeTrackingCreate, dict, dict, dict, VolumeTrackingRead]
 crud_volume_tracking = CRUDVolumeTracking(VolumeTracking)
 
-CRUDStrengthProgression = FastCRUD[StrengthProgression, StrengthProgressionCreate, dict, dict, dict, StrengthProgressionRead]
+CRUDStrengthProgression = FastCRUD[
+    StrengthProgression, StrengthProgressionCreate, dict, dict, dict, StrengthProgressionRead
+]
 crud_strength_progression = CRUDStrengthProgression(StrengthProgression)
-

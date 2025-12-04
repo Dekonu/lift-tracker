@@ -13,9 +13,8 @@ class ExerciseInstance(Base):
     order: Mapped[int] = mapped_column(Integer, index=True)
 
     # Relationships
-    workout: Mapped["Workout"] = relationship("Workout", back_populates="exercise_instances", init=False)
-    exercise: Mapped["Exercise"] = relationship("Exercise", back_populates="exercise_instances", init=False)
-    sets: Mapped[list["Set"]] = relationship(
+    workout: Mapped["Workout"] = relationship("Workout", back_populates="exercise_instances", init=False)  # noqa: F821
+    exercise: Mapped["Exercise"] = relationship("Exercise", back_populates="exercise_instances", init=False)  # noqa: F821
+    sets: Mapped[list["Set"]] = relationship(  # noqa: F821
         "Set", back_populates="exercise_instance", cascade="all, delete-orphan", order_by="Set.id", init=False
     )
-

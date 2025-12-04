@@ -1,7 +1,7 @@
 import os
 import re
 from enum import Enum
-from urllib.parse import quote_plus, urlparse, urlunparse, parse_qs
+from urllib.parse import quote_plus
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings
@@ -24,8 +24,8 @@ def get_config(key: str, default: str | None = None, cast=None):
             return None
         if cast:
             # Handle boolean casting
-            if cast == bool:
-                return default.lower() in ('true', '1', 'yes', 'on') if isinstance(default, str) else bool(default)
+            if cast is bool:
+                return default.lower() in ("true", "1", "yes", "on") if isinstance(default, str) else bool(default)
             return cast(default)
         return default
     except Exception:
@@ -34,8 +34,8 @@ def get_config(key: str, default: str | None = None, cast=None):
             return None
         if cast:
             # Handle boolean casting
-            if cast == bool:
-                return default.lower() in ('true', '1', 'yes', 'on') if isinstance(default, str) else bool(default)
+            if cast is bool:
+                return default.lower() in ("true", "1", "yes", "on") if isinstance(default, str) else bool(default)
             return cast(default)
         return default
 
@@ -50,7 +50,9 @@ class AppSettings(BaseSettings):
 
 
 class CryptSettings(BaseSettings):
-    SECRET_KEY: SecretStr = get_config("SECRET_KEY", default="_iKGN8PWR4WcQU4EoCRXzjjGNMcYT1GjPaahCtEm0bI", cast=SecretStr)
+    SECRET_KEY: SecretStr = get_config(
+        "SECRET_KEY", default="_iKGN8PWR4WcQU4EoCRXzjjGNMcYT1GjPaahCtEm0bI", cast=SecretStr
+    )
     ALGORITHM: str = get_config("ALGORITHM", default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = get_config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = get_config("REFRESH_TOKEN_EXPIRE_DAYS", default=7)
@@ -89,21 +91,21 @@ class SupabaseSettings(DatabaseSettings):
     POSTGRES_ASYNC_PREFIX: str = config("POSTGRES_ASYNC_PREFIX", default="postgresql+asyncpg://")
     POSTGRES_URI: str | None = config("POSTGRES_URI", default=None)
     POSTGRES_URL: str | None = config("POSTGRES_URL", default=None)
-    
+
     @property
     def database_uri(self) -> str:
         """Get database URI, preferring direct URL or constructing from components."""
         if self.POSTGRES_URL:
             # Parse and fix the URL to handle special characters in password
             url = self.POSTGRES_URL.strip()
-            
+
             # Remove protocol if present to get the URI part
             uri = url
             if url.startswith("postgresql+asyncpg://"):
                 uri = url.replace("postgresql+asyncpg://", "", 1)
             elif url.startswith("postgresql://"):
                 uri = url.replace("postgresql://", "", 1)
-            
+
             # Parse the URI manually to handle special characters in password
             # Format: user:password@host:port/database
             # Use regex to extract components before @ symbol
@@ -115,7 +117,7 @@ class SupabaseSettings(DatabaseSettings):
                 # Reconstruct URI with encoded password
                 encoded_uri = f"{username}:{encoded_password}@{rest}"
                 return encoded_uri
-            
+
             # If no match (no password or different format), return as-is
             return uri
         if self.POSTGRES_URI:
@@ -128,7 +130,10 @@ class SupabaseSettings(DatabaseSettings):
             )
         # URL-encode password to handle special characters
         encoded_password = quote_plus(self.SUPABASE_DB_PASSWORD)
-        return f"{self.SUPABASE_DB_USER}:{encoded_password}@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
+        return (
+            f"{self.SUPABASE_DB_USER}:{encoded_password}@"
+            f"{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
+        )
 
 
 class FirstUserSettings(BaseSettings):
@@ -145,13 +150,13 @@ class RedisCacheSettings(BaseSettings):
     REDIS_CACHE_HOST: str = config("REDIS_CACHE_HOST", default="localhost")
     REDIS_CACHE_PORT: int = config("REDIS_CACHE_PORT", default=6379)
     REDIS_CACHE_URL: str = f"redis://{REDIS_CACHE_HOST}:{REDIS_CACHE_PORT}"
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Check if Redis is enabled in config, default to False
         try:
             enabled = config("REDIS_CACHE_ENABLED", default="false")
-            self.REDIS_CACHE_ENABLED = str(enabled).lower() in ('true', '1', 'yes', 'on')
+            self.REDIS_CACHE_ENABLED = str(enabled).lower() in ("true", "1", "yes", "on")
         except Exception:
             self.REDIS_CACHE_ENABLED = False
 
@@ -164,13 +169,13 @@ class RedisQueueSettings(BaseSettings):
     REDIS_QUEUE_ENABLED: bool = False
     REDIS_QUEUE_HOST: str = config("REDIS_QUEUE_HOST", default="localhost")
     REDIS_QUEUE_PORT: int = config("REDIS_QUEUE_PORT", default=6379)
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Check if Redis is enabled in config, default to False
         try:
             enabled = config("REDIS_QUEUE_ENABLED", default="false")
-            self.REDIS_QUEUE_ENABLED = str(enabled).lower() in ('true', '1', 'yes', 'on')
+            self.REDIS_QUEUE_ENABLED = str(enabled).lower() in ("true", "1", "yes", "on")
         except Exception:
             self.REDIS_QUEUE_ENABLED = False
 
@@ -180,13 +185,13 @@ class RedisRateLimiterSettings(BaseSettings):
     REDIS_RATE_LIMIT_HOST: str = config("REDIS_RATE_LIMIT_HOST", default="localhost")
     REDIS_RATE_LIMIT_PORT: int = config("REDIS_RATE_LIMIT_PORT", default=6379)
     REDIS_RATE_LIMIT_URL: str = f"redis://{REDIS_RATE_LIMIT_HOST}:{REDIS_RATE_LIMIT_PORT}"
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Check if Redis is enabled in config, default to False
         try:
             enabled = config("REDIS_RATE_LIMIT_ENABLED", default="false")
-            self.REDIS_RATE_LIMIT_ENABLED = str(enabled).lower() in ('true', '1', 'yes', 'on')
+            self.REDIS_RATE_LIMIT_ENABLED = str(enabled).lower() in ("true", "1", "yes", "on")
         except Exception:
             self.REDIS_RATE_LIMIT_ENABLED = False
 

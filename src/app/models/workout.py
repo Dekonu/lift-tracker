@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..core.db.database import Base
@@ -16,8 +16,11 @@ class Workout(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     # Relationships
-    user: Mapped["User"] = relationship("User", init=False)
-    exercise_instances: Mapped[list["ExerciseInstance"]] = relationship(
-        "ExerciseInstance", back_populates="workout", cascade="all, delete-orphan", order_by="ExerciseInstance.order", init=False
+    user: Mapped["User"] = relationship("User", init=False)  # noqa: F821
+    exercise_instances: Mapped[list["ExerciseInstance"]] = relationship(  # noqa: F821
+        "ExerciseInstance",
+        back_populates="workout",
+        cascade="all, delete-orphan",
+        order_by="ExerciseInstance.order",
+        init=False,
     )
-

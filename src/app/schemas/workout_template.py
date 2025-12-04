@@ -27,4 +27,3 @@ class WorkoutTemplateRead(WorkoutTemplateBase):
     user_id: int | None
     created_at: datetime
     updated_at: datetime | None
-

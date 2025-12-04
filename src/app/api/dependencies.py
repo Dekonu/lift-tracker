@@ -25,7 +25,7 @@ async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)], db: Annotated[AsyncSession, Depends(async_get_db)]
 ) -> dict[str, Any] | None:
     from ..schemas.user import UserRead
-    
+
     token_data = await verify_token(token, TokenType.ACCESS, db)
     if token_data is None:
         raise UnauthorizedException("User not authenticated.")
@@ -35,16 +35,16 @@ async def get_current_user(
 
     if user:
         # When using schema_to_select=UserRead, FastCRUD returns a Pydantic model
-        if hasattr(user, 'model_dump'):
+        if hasattr(user, "model_dump"):
             user_dict = user.model_dump()
             # Ensure is_superuser is included (should be from UserRead schema)
-            if 'is_superuser' not in user_dict:
-                user_dict['is_superuser'] = getattr(user, 'is_superuser', False)
+            if "is_superuser" not in user_dict:
+                user_dict["is_superuser"] = getattr(user, "is_superuser", False)
             return user_dict
         elif isinstance(user, dict):
             # Ensure is_superuser is included
-            if 'is_superuser' not in user:
-                user['is_superuser'] = False
+            if "is_superuser" not in user:
+                user["is_superuser"] = False
             return user
         else:
             # Convert model instance to dict manually
@@ -54,7 +54,7 @@ async def get_current_user(
                 "email": user.email,
                 "profile_image_url": user.profile_image_url,
                 "tier_id": user.tier_id,
-                "is_superuser": getattr(user, 'is_superuser', False)
+                "is_superuser": getattr(user, "is_superuser", False),
             }
 
     raise UnauthorizedException("User not authenticated.")

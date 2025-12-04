@@ -35,15 +35,16 @@ from .utils import cache, queue
 async def create_tables() -> None:
     """
     Create database tables, handling asyncpg prepared statement conflicts.
-    
+
     This function attempts to create tables but gracefully handles errors that can occur
     with connection poolers (like Supabase's pooler) that don't fully support prepared statements.
     If table creation fails due to prepared statement conflicts, we log a warning and continue,
     as the tables may already exist or will be created on the next successful connection.
     """
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     max_retries = 2  # Reduced retries since NullPool should avoid most conflicts
     for attempt in range(max_retries):
         try:
@@ -58,10 +59,9 @@ async def create_tables() -> None:
             # This is a known issue with asyncpg and Supabase's pooler
             error_str = str(e)
             is_prepared_statement_error = (
-                "DuplicatePreparedStatementError" in error_str 
-                or "prepared statement" in error_str.lower()
+                "DuplicatePreparedStatementError" in error_str or "prepared statement" in error_str.lower()
             )
-            
+
             if is_prepared_statement_error:
                 if attempt < max_retries - 1:
                     logger.debug(
@@ -70,6 +70,7 @@ async def create_tables() -> None:
                     )
                     # Wait a bit before retrying
                     import asyncio
+
                     await asyncio.sleep(0.3 * (attempt + 1))
                     continue
                 else:
@@ -160,6 +161,7 @@ def lifespan_factory(
                     await create_redis_cache_pool()
                 except Exception as e:
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.warning(f"Redis cache not available, continuing without cache: {e}")
 
@@ -168,6 +170,7 @@ def lifespan_factory(
                     await create_redis_queue_pool()
                 except Exception as e:
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.warning(f"Redis queue not available, continuing without queue: {e}")
 
@@ -176,6 +179,7 @@ def lifespan_factory(
                     await create_redis_rate_limit_pool()
                 except Exception as e:
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.warning(f"Redis rate limiter not available, continuing without rate limiting: {e}")
 
@@ -184,9 +188,12 @@ def lifespan_factory(
                     await create_tables()
                 except Exception as e:
                     import logging
+
                     logger = logging.getLogger(__name__)
                     logger.error(f"Failed to create database tables: {e}")
-                    logger.warning("Continuing without database tables. Make sure your database is configured correctly.")
+                    logger.warning(
+                        "Continuing without database tables. Make sure your database is configured correctly."
+                    )
 
             initialization_complete.set()
 

@@ -5,4 +5,3 @@ from ..schemas.user_profile import UserProfileCreate, UserProfileRead, UserProfi
 
 CRUDUserProfile = FastCRUD[UserProfile, UserProfileCreate, UserProfileUpdate, UserProfileUpdate, dict, UserProfileRead]
 crud_user_profile = CRUDUserProfile(UserProfile)
-

@@ -19,4 +19,3 @@ class ExerciseCategoryUpdate(BaseModel):
 
 class ExerciseCategoryRead(ExerciseCategoryBase):
     id: int
-

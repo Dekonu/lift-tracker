@@ -1,7 +1,7 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
-from fastcrud.paginated import PaginatedListResponse, compute_offset, paginated_response
+from fastcrud.paginated import PaginatedListResponse, compute_offset
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...api.dependencies import get_current_user
@@ -26,21 +26,21 @@ async def link_equipment_to_exercise(
     """Link equipment to an exercise (admin only)."""
     if not current_user.get("is_superuser", False):
         raise NotFoundException("Only administrators can link equipment to exercises")
-    
+
     # Verify exercise exists
     exercise = await crud_exercises.get(db=db, id=exercise_id)
     if exercise is None:
         raise NotFoundException("Exercise not found")
-    
+
     # Verify equipment exists
     equipment = await crud_equipment.get(db=db, id=equipment_id)
     if equipment is None:
         raise NotFoundException("Equipment not found")
-    
+
     # Link equipment
     await crud_exercise_equipment.link_equipment(db=db, exercise_id=exercise_id, equipment_id=equipment_id)
     await db.commit()
-    
+
     return {"message": f"Equipment '{equipment.name}' linked to exercise '{exercise.name}'"}
 
 
@@ -55,21 +55,21 @@ async def unlink_equipment_from_exercise(
     """Unlink equipment from an exercise (admin only)."""
     if not current_user.get("is_superuser", False):
         raise NotFoundException("Only administrators can unlink equipment from exercises")
-    
+
     # Verify exercise exists
     exercise = await crud_exercises.get(db=db, id=exercise_id)
     if exercise is None:
         raise NotFoundException("Exercise not found")
-    
+
     # Verify equipment exists
     equipment = await crud_equipment.get(db=db, id=equipment_id)
     if equipment is None:
         raise NotFoundException("Equipment not found")
-    
+
     # Unlink equipment
     await crud_exercise_equipment.unlink_equipment(db=db, exercise_id=exercise_id, equipment_id=equipment_id)
     await db.commit()
-    
+
     return {"message": f"Equipment '{equipment.name}' unlinked from exercise '{exercise.name}'"}
 
 
@@ -86,10 +86,10 @@ async def get_exercise_equipment(
     exercise = await crud_exercises.get(db=db, id=exercise_id)
     if exercise is None:
         raise NotFoundException("Exercise not found")
-    
+
     # Get equipment links
     equipment_links = await crud_exercise_equipment.get_by_exercise(db=db, exercise_id=exercise_id)
-    
+
     # Get equipment details
     equipment_list = []
     for link in equipment_links:
@@ -97,13 +97,13 @@ async def get_exercise_equipment(
         equipment = await crud_equipment.get(db=db, id=equipment_id, schema_to_select=EquipmentRead)
         if equipment:
             equipment_list.append(equipment)
-    
+
     # Paginate
     total = len(equipment_list)
     start = compute_offset(page, items_per_page)
     end = start + items_per_page
     paginated_equipment = equipment_list[start:end]
-    
+
     return {
         "data": paginated_equipment,
         "total": total,
@@ -111,4 +111,3 @@ async def get_exercise_equipment(
         "items_per_page": items_per_page,
         "pages": (total + items_per_page - 1) // items_per_page if total > 0 else 0,
     }
-

@@ -12,4 +12,3 @@ CRUDExerciseInstance = FastCRUD[
     ExerciseInstanceRead,
 ]
 crud_exercise_instances = CRUDExerciseInstance(ExerciseInstance)
-

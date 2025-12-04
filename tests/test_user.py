@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from src.app.api.v1.users import erase_user, patch_user, read_user, read_users, write_user
-from src.app.core.exceptions.http_exceptions import DuplicateValueException, ForbiddenException, NotFoundException
+from src.app.core.exceptions.http_exceptions import DuplicateValueException, NotFoundException
 from src.app.schemas.user import UserCreate, UserRead, UserUpdate
 
 
@@ -73,9 +73,7 @@ class TestReadUser:
             result = await read_user(Mock(), user_id, mock_db)
 
             assert result == sample_user_read
-            mock_crud.get.assert_called_once_with(
-                db=mock_db, id=user_id, is_deleted=False, schema_to_select=UserRead
-            )
+            mock_crud.get.assert_called_once_with(db=mock_db, id=user_id, is_deleted=False, schema_to_select=UserRead)
 
     @pytest.mark.asyncio
     async def test_read_user_not_found(self, mock_db):
@@ -118,13 +116,13 @@ class TestPatchUser:
     async def test_patch_user_success(self, mock_db, current_user_dict, sample_user_read):
         """Test successful user update."""
         user_update = UserUpdate(name="New Name")
-        
+
         user_dict = sample_user_read.model_dump()
         user_dict["email"] = current_user_dict["email"]
 
         with patch("src.app.api.v1.users.crud_users") as mock_crud:
-            mock_crud.get = AsyncMock(return_value=user_dict)  
-            mock_crud.exists = AsyncMock(return_value=False)  
+            mock_crud.get = AsyncMock(return_value=user_dict)
+            mock_crud.exists = AsyncMock(return_value=False)
             mock_crud.update = AsyncMock(return_value=None)
 
             result = await patch_user(Mock(), user_update, current_user_dict, mock_db)

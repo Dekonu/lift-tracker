@@ -28,3 +28,5 @@ jobs:
       env:
         ENVIRONMENT: local
         SECRET_KEY: test-secret-key-for-testing-only
+        CI: true
+        # Database will fall back to SQLite automatically in test/CI environments

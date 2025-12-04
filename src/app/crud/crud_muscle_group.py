@@ -12,4 +12,3 @@ CRUDMuscleGroup = FastCRUD[
     MuscleGroupRead,
 ]
 crud_muscle_groups = CRUDMuscleGroup(MuscleGroup)
-

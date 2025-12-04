@@ -18,4 +18,3 @@ from .user import (
     UserUpdateInternal,
 )
 from .workout import WorkoutCreate, WorkoutRead, WorkoutUpdate
-

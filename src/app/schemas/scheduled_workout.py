@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
-    from .workout_template import WorkoutTemplateRead
     from .program import ProgramRead
     from .workout_session import WorkoutSessionRead
+    from .workout_template import WorkoutTemplateRead
 
 
 class ScheduledWorkoutBase(BaseModel):
@@ -38,9 +38,8 @@ class ScheduledWorkoutRead(ScheduledWorkoutBase):
     completed_workout_session_id: int | None
     created_at: datetime
     updated_at: datetime | None
-    workout_template: Annotated["WorkoutTemplateRead | None", Field(default=None)]
-    program: Annotated["ProgramRead | None", Field(default=None)]
-    completed_session: Annotated["WorkoutSessionRead | None", Field(default=None)]
+    workout_template: Annotated[WorkoutTemplateRead | None, Field(default=None)]
+    program: Annotated[ProgramRead | None, Field(default=None)]
+    completed_session: Annotated[WorkoutSessionRead | None, Field(default=None)]
 
     model_config = ConfigDict(arbitrary_types_allowed=True, from_attributes=True)
-

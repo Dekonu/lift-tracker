@@ -9,7 +9,6 @@ from src.app.api.v1.workouts import (
     create_exercise_instance,
     create_set,
     create_workout,
-    delete_exercise_instance,
     delete_set,
     delete_workout,
     read_workout,
@@ -41,9 +40,10 @@ class TestCreateWorkout:
             exercise_instances=[],
         )
 
-        with patch("src.app.api.v1.workouts.crud_workouts") as mock_crud, patch(
-            "src.app.api.v1.workouts.get_workout_with_relations"
-        ) as mock_get:
+        with (
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud,
+            patch("src.app.api.v1.workouts.get_workout_with_relations") as mock_get,
+        ):
             mock_crud.create = AsyncMock(return_value=created_mock)
             mock_get.return_value = workout_read
 
@@ -59,9 +59,10 @@ class TestCreateWorkout:
         workout_create = WorkoutCreate(date=datetime.now())
         created_mock = Mock(id=1)
 
-        with patch("src.app.api.v1.workouts.crud_workouts") as mock_crud, patch(
-            "src.app.api.v1.workouts.get_workout_with_relations"
-        ) as mock_get:
+        with (
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud,
+            patch("src.app.api.v1.workouts.get_workout_with_relations") as mock_get,
+        ):
             mock_crud.create = AsyncMock(return_value=created_mock)
             mock_get.return_value = None
 
@@ -121,9 +122,11 @@ class TestReadWorkouts:
             exercise_instances=[],
         )
 
-        with patch("src.app.api.v1.workouts.crud_workouts") as mock_crud, patch(
-            "src.app.api.v1.workouts.get_workout_with_relations"
-        ) as mock_get, patch("src.app.api.v1.workouts.paginated_response") as mock_paginated:
+        with (
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud,
+            patch("src.app.api.v1.workouts.get_workout_with_relations") as mock_get,
+            patch("src.app.api.v1.workouts.paginated_response") as mock_paginated,
+        ):
             mock_crud.get_multi = AsyncMock(return_value=mock_data)
             mock_get.return_value = workout_read
             expected_response = {"data": [{"id": 1}], "pagination": {}}
@@ -224,9 +227,11 @@ class TestCreateExerciseInstance:
         created_mock = Mock(id=1)
         exercise_instance_read = ExerciseInstanceRead(id=1, workout_id=workout_id, exercise_id=1, order=0, sets=[])
 
-        with patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w, patch(
-            "src.app.api.v1.workouts.crud_exercises"
-        ) as mock_crud_ex, patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud_ei:
+        with (
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w,
+            patch("src.app.api.v1.workouts.crud_exercises") as mock_crud_ex,
+            patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud_ei,
+        ):
             mock_crud_w.get = AsyncMock(return_value=workout)
             mock_crud_ex.get = AsyncMock(return_value=exercise)
             mock_crud_ei.create = AsyncMock(return_value=created_mock)
@@ -249,9 +254,7 @@ class TestCreateExerciseInstance:
             mock_crud.get = AsyncMock(return_value=None)
 
             with pytest.raises(NotFoundException, match="Workout not found"):
-                await create_exercise_instance(
-                    Mock(), workout_id, exercise_instance_create, mock_db, current_user_dict
-                )
+                await create_exercise_instance(Mock(), workout_id, exercise_instance_create, mock_db, current_user_dict)
 
     @pytest.mark.asyncio
     async def test_create_exercise_instance_forbidden(self, mock_db, current_user_dict):
@@ -264,9 +267,7 @@ class TestCreateExerciseInstance:
             mock_crud.get = AsyncMock(return_value=workout)
 
             with pytest.raises(ForbiddenException, match="You do not have permission to modify this workout"):
-                await create_exercise_instance(
-                    Mock(), workout_id, exercise_instance_create, mock_db, current_user_dict
-                )
+                await create_exercise_instance(Mock(), workout_id, exercise_instance_create, mock_db, current_user_dict)
 
 
 class TestCreateSet:
@@ -298,9 +299,11 @@ class TestCreateSet:
             notes="Felt strong",
         )
 
-        with patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud_ei, patch(
-            "src.app.api.v1.workouts.crud_workouts"
-        ) as mock_crud_w, patch("src.app.api.v1.workouts.crud_sets") as mock_crud_s:
+        with (
+            patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud_ei,
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w,
+            patch("src.app.api.v1.workouts.crud_sets") as mock_crud_s,
+        ):
             mock_crud_ei.get = AsyncMock(return_value=exercise_instance)
             mock_crud_w.get = AsyncMock(return_value=workout)
             mock_crud_s.create = AsyncMock(return_value=created_mock)
@@ -315,9 +318,7 @@ class TestCreateSet:
     async def test_create_set_exercise_instance_not_found(self, mock_db, current_user_dict):
         """Test set creation when exercise instance not found."""
         exercise_instance_id = 999
-        set_create = SetCreate(
-            weight_value=135.5, weight_type=WeightType.STATIC, unit=WeightUnit.POUNDS
-        )
+        set_create = SetCreate(weight_value=135.5, weight_type=WeightType.STATIC, unit=WeightUnit.POUNDS)
 
         with patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud:
             mock_crud.get = AsyncMock(return_value=None)
@@ -338,9 +339,11 @@ class TestUpdateSet:
         exercise_instance = {"id": 1, "workout_id": 1}
         workout = {"id": 1, "user_id": current_user_dict["id"]}
 
-        with patch("src.app.api.v1.workouts.crud_sets") as mock_crud_s, patch(
-            "src.app.api.v1.workouts.crud_exercise_instances"
-        ) as mock_crud_ei, patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w:
+        with (
+            patch("src.app.api.v1.workouts.crud_sets") as mock_crud_s,
+            patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud_ei,
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w,
+        ):
             mock_crud_s.get = AsyncMock(return_value=set_obj)
             mock_crud_ei.get = AsyncMock(return_value=exercise_instance)
             mock_crud_w.get = AsyncMock(return_value=workout)
@@ -375,9 +378,11 @@ class TestDeleteSet:
         exercise_instance = {"id": 1, "workout_id": 1}
         workout = {"id": 1, "user_id": current_user_dict["id"]}
 
-        with patch("src.app.api.v1.workouts.crud_sets") as mock_crud_s, patch(
-            "src.app.api.v1.workouts.crud_exercise_instances"
-        ) as mock_crud_ei, patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w:
+        with (
+            patch("src.app.api.v1.workouts.crud_sets") as mock_crud_s,
+            patch("src.app.api.v1.workouts.crud_exercise_instances") as mock_crud_ei,
+            patch("src.app.api.v1.workouts.crud_workouts") as mock_crud_w,
+        ):
             mock_crud_s.get = AsyncMock(return_value=set_obj)
             mock_crud_ei.get = AsyncMock(return_value=exercise_instance)
             mock_crud_w.get = AsyncMock(return_value=workout)
@@ -387,4 +392,3 @@ class TestDeleteSet:
 
             assert result == {"message": "Set deleted"}
             mock_crud_s.db_delete.assert_called_once_with(db=mock_db, id=set_id)
-

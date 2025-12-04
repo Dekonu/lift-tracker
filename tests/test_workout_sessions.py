@@ -1,6 +1,6 @@
 """Unit tests for workout session API endpoints."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -77,8 +77,7 @@ class TestGetWorkoutSessions:
     async def test_get_workout_sessions_success(self, mock_db, current_user_dict):
         """Test successful workout sessions list retrieval."""
         from unittest.mock import MagicMock
-        from src.app.models.workout_session import WorkoutSession
-        
+
         # Mock session object
         mock_session = MagicMock()
         mock_session.id = 1
@@ -93,15 +92,15 @@ class TestGetWorkoutSessions:
         mock_session.total_sets = None
         mock_session.created_at = datetime.now(UTC)
         mock_session.updated_at = None
-        
+
         # Mock result object
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [mock_session]
-        
+
         # Mock count result
         mock_count_result = MagicMock()
         mock_count_result.scalar.return_value = 1
-        
+
         # Mock db.execute to return different values for query and count
         mock_db.execute = AsyncMock(side_effect=[mock_result, mock_count_result])
 
@@ -245,9 +244,11 @@ class TestAddExerciseToSession:
             sets=[],
         )
 
-        with patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w, patch(
-            "src.app.api.v1.workout_sessions.crud_exercises"
-        ) as mock_crud_ex, patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei:
+        with (
+            patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w,
+            patch("src.app.api.v1.workout_sessions.crud_exercises") as mock_crud_ex,
+            patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei,
+        ):
             mock_crud_w.get = AsyncMock(return_value=session)
             mock_crud_ex.get = AsyncMock(return_value=exercise)
             mock_crud_ei.create = AsyncMock(return_value=created_mock)
@@ -277,9 +278,10 @@ class TestAddExerciseToSession:
         entry_create = ExerciseEntryCreate(exercise_id=999, workout_session_id=session_id, order=0)
         session = {"id": 1, "user_id": current_user_dict["id"]}
 
-        with patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w, patch(
-            "src.app.api.v1.workout_sessions.crud_exercises"
-        ) as mock_crud_ex:
+        with (
+            patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w,
+            patch("src.app.api.v1.workout_sessions.crud_exercises") as mock_crud_ex,
+        ):
             mock_crud_w.get = AsyncMock(return_value=session)
             mock_crud_ex.get = AsyncMock(return_value=None)
 
@@ -297,15 +299,19 @@ class TestGetExerciseEntries:
         session = {"id": 1, "user_id": current_user_dict["id"]}
         mock_data = {"data": [{"id": 1, "workout_session_id": session_id}], "count": 1}
 
-        with patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w, patch(
-            "src.app.api.v1.workout_sessions.crud_exercise_entry"
-        ) as mock_crud_ei, patch("src.app.api.v1.workout_sessions.paginated_response") as mock_paginated:
+        with (
+            patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w,
+            patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei,
+            patch("src.app.api.v1.workout_sessions.paginated_response") as mock_paginated,
+        ):
             mock_crud_w.get = AsyncMock(return_value=session)
             mock_crud_ei.get_multi = AsyncMock(return_value=mock_data)
             expected_response = {"data": [{"id": 1}], "pagination": {}}
             mock_paginated.return_value = expected_response
 
-            result = await get_exercise_entries(Mock(), session_id, mock_db, current_user_dict, page=1, items_per_page=50)
+            result = await get_exercise_entries(
+                Mock(), session_id, mock_db, current_user_dict, page=1, items_per_page=50
+            )
 
             assert result == expected_response
 
@@ -331,9 +337,11 @@ class TestAddSetToEntry:
             created_at=datetime.now(UTC),
         )
 
-        with patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei, patch(
-            "src.app.api.v1.workout_sessions.crud_workout_session"
-        ) as mock_crud_w, patch("src.app.api.v1.workout_sessions.crud_set_entry") as mock_crud_s:
+        with (
+            patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei,
+            patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w,
+            patch("src.app.api.v1.workout_sessions.crud_set_entry") as mock_crud_s,
+        ):
             mock_crud_ei.get = AsyncMock(return_value=entry)
             mock_crud_w.get = AsyncMock(return_value=session)
             mock_crud_s.create = AsyncMock(return_value=created_mock)
@@ -364,13 +372,12 @@ class TestGetSetsForEntry:
     async def test_get_sets_for_entry_success(self, mock_db, current_user_dict):
         """Test successful sets list retrieval."""
         from unittest.mock import MagicMock
-        from src.app.models.set_entry import SetEntry
-        
+
         entry_id = 1
         entry = Mock(id=entry_id, workout_session_id=1)
         entry.workout_session_id = 1
         session = {"id": 1, "user_id": current_user_dict["id"]}
-        
+
         # Mock set entry object
         mock_set = MagicMock()
         mock_set.id = 1
@@ -386,18 +393,19 @@ class TestGetSetsForEntry:
         mock_set.notes = None
         mock_set.is_warmup = False
         mock_set.created_at = datetime.now(UTC)
-        
+
         # Mock result object
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [mock_set]
-        
+
         # Mock count result
         mock_count_result = MagicMock()
         mock_count_result.scalar.return_value = 1
-        
-        with patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei, patch(
-            "src.app.api.v1.workout_sessions.crud_workout_session"
-        ) as mock_crud_w:
+
+        with (
+            patch("src.app.api.v1.workout_sessions.crud_exercise_entry") as mock_crud_ei,
+            patch("src.app.api.v1.workout_sessions.crud_workout_session") as mock_crud_w,
+        ):
             mock_crud_ei.get = AsyncMock(return_value=entry)
             mock_crud_w.get = AsyncMock(return_value=session)
             # Mock db.execute to return different values for query and count
@@ -409,4 +417,3 @@ class TestGetSetsForEntry:
             assert "data" in result
             # paginated_response returns total_count, has_more, page, items_per_page, not "pagination"
             assert "total_count" in result or "pagination" in result
-

@@ -114,4 +114,3 @@ async def delete_muscle_group(
 
     await crud_muscle_groups.db_delete(db=db, id=muscle_group_id)
     return {"message": "Muscle group deleted"}
-

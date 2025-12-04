@@ -38,7 +38,6 @@ class WorkoutSessionRead(WorkoutSessionBase):
     total_sets: int | None
     created_at: datetime
     updated_at: datetime | None
-    exercise_entries: list["ExerciseEntryRead"] = []
+    exercise_entries: list[ExerciseEntryRead] = []
 
     model_config = ConfigDict(arbitrary_types_allowed=True, from_attributes=True)
-

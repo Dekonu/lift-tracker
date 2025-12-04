@@ -24,24 +24,34 @@ class TestCreateExercise:
         exercise_create = ExerciseCreate(
             name="Bench Press", primary_muscle_group_ids=[1], secondary_muscle_group_ids=[2, 3], equipment_ids=[]
         )
-        created_mock = Mock(id=1)
         primary_mg = {"id": 1, "name": "Chest"}
         secondary_mg1 = {"id": 2, "name": "Shoulders"}
         secondary_mg2 = {"id": 3, "name": "Triceps"}
 
-        with patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex, patch(
-            "src.app.api.v1.exercises.crud_muscle_groups"
-        ) as mock_crud_mg, patch(
-            "src.app.api.v1.exercises.create_exercise_with_muscle_groups"
-        ) as mock_create, patch(
-            "src.app.api.v1.exercises.crud_exercise_equipment"
-        ) as mock_crud_eq:
+        with (
+            patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex,
+            patch("src.app.api.v1.exercises.crud_muscle_groups") as mock_crud_mg,
+            patch("src.app.api.v1.exercises.create_exercise_with_muscle_groups") as mock_create,
+            patch("src.app.api.v1.exercises.crud_exercise_equipment") as mock_crud_eq,
+        ):
             mock_crud_ex.exists = AsyncMock(return_value=False)
             mock_crud_mg.get = AsyncMock(side_effect=[primary_mg, secondary_mg1, secondary_mg2])
             mock_create.return_value = ExerciseRead(
-                id=1, name="Bench Press", primary_muscle_group_ids=[1], secondary_muscle_group_ids=[2, 3], equipment_ids=[]
+                id=1,
+                name="Bench Press",
+                primary_muscle_group_ids=[1],
+                secondary_muscle_group_ids=[2, 3],
+                equipment_ids=[],
             )
-            mock_crud_ex.get = AsyncMock(return_value={"id": 1, "name": "Bench Press", "primary_muscle_group_ids": [1], "secondary_muscle_group_ids": [2, 3], "equipment_ids": []})
+            mock_crud_ex.get = AsyncMock(
+                return_value={
+                    "id": 1,
+                    "name": "Bench Press",
+                    "primary_muscle_group_ids": [1],
+                    "secondary_muscle_group_ids": [2, 3],
+                    "equipment_ids": [],
+                }
+            )
             mock_crud_eq.get_by_exercise = AsyncMock(return_value=[])
             mock_crud_eq.set_equipment_for_exercise = AsyncMock()
 
@@ -71,9 +81,10 @@ class TestCreateExercise:
             name="Bench Press", primary_muscle_group_ids=[999], secondary_muscle_group_ids=[], equipment_ids=[]
         )
 
-        with patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex, patch(
-            "src.app.api.v1.exercises.crud_muscle_groups"
-        ) as mock_crud_mg:
+        with (
+            patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex,
+            patch("src.app.api.v1.exercises.crud_muscle_groups") as mock_crud_mg,
+        ):
             mock_crud_ex.exists = AsyncMock(return_value=False)
             mock_crud_mg.get = AsyncMock(return_value=None)
 
@@ -88,9 +99,10 @@ class TestCreateExercise:
         )
         primary_mg = {"id": 1, "name": "Chest"}
 
-        with patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex, patch(
-            "src.app.api.v1.exercises.crud_muscle_groups"
-        ) as mock_crud_mg:
+        with (
+            patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex,
+            patch("src.app.api.v1.exercises.crud_muscle_groups") as mock_crud_mg,
+        ):
             mock_crud_ex.exists = AsyncMock(return_value=False)
             mock_crud_mg.get = AsyncMock(side_effect=[primary_mg, None])
 
@@ -105,20 +117,24 @@ class TestReadExercise:
     async def test_read_exercise_success(self, mock_db):
         """Test successful exercise retrieval."""
         from unittest.mock import MagicMock
-        
+
         exercise_id = 1
         exercise_read = ExerciseRead(
-            id=exercise_id, name="Bench Press", primary_muscle_group_ids=[1], secondary_muscle_group_ids=[2, 3], equipment_ids=[]
+            id=exercise_id,
+            name="Bench Press",
+            primary_muscle_group_ids=[1],
+            secondary_muscle_group_ids=[2, 3],
+            equipment_ids=[],
         )
 
         # Mock equipment query result
         mock_equipment_result = MagicMock()
         mock_equipment_result.scalars.return_value.all.return_value = []
-        
+
         # Mock muscle group query result
         mock_mg_result = MagicMock()
         mock_mg_result.scalars.return_value.all.return_value = []
-        
+
         # Mock equipment names query result
         mock_eq_names_result = MagicMock()
         mock_eq_names_result.scalars.return_value.all.return_value = []
@@ -153,17 +169,29 @@ class TestReadExercises:
     async def test_read_exercises_success(self, mock_db):
         """Test successful exercises list retrieval."""
         from unittest.mock import MagicMock
-        
-        mock_data = {"data": [{"id": 1, "name": "Bench Press", "primary_muscle_group_ids": [1], "secondary_muscle_group_ids": [], "equipment_ids": [], "enabled": True}], "total_count": 1}
+
+        mock_data = {
+            "data": [
+                {
+                    "id": 1,
+                    "name": "Bench Press",
+                    "primary_muscle_group_ids": [1],
+                    "secondary_muscle_group_ids": [],
+                    "equipment_ids": [],
+                    "enabled": True,
+                }
+            ],
+            "total_count": 1,
+        }
 
         # Mock equipment query result
         mock_equipment_result = MagicMock()
         mock_equipment_result.scalars.return_value.all.return_value = []
-        
+
         # Mock muscle group query result
         mock_mg_result = MagicMock()
         mock_mg_result.scalars.return_value.all.return_value = []
-        
+
         # Mock equipment names query result
         mock_eq_names_result = MagicMock()
         mock_eq_names_result.scalars.return_value.all.return_value = []
@@ -190,9 +218,10 @@ class TestUpdateExercise:
         exercise_update = ExerciseUpdate(name="Updated Bench Press")
         existing = {"id": 1, "name": "Bench Press"}
 
-        with patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex, patch(
-            "src.app.api.v1.exercises.update_exercise_with_muscle_groups"
-        ) as mock_update:
+        with (
+            patch("src.app.api.v1.exercises.crud_exercises") as mock_crud_ex,
+            patch("src.app.api.v1.exercises.update_exercise_with_muscle_groups") as mock_update,
+        ):
             mock_crud_ex.get = AsyncMock(return_value=existing)
             mock_crud_ex.exists = AsyncMock(return_value=False)
             mock_update.return_value = None
@@ -258,4 +287,3 @@ class TestDeleteExercise:
 
             with pytest.raises(NotFoundException, match="Exercise not found"):
                 await delete_exercise(Mock(), exercise_id, mock_db, current_user_dict)
-

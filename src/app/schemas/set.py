@@ -36,4 +36,3 @@ class SetUpdate(BaseModel):
     rest_time_seconds: Annotated[int | None, Field(gt=0, examples=[90], default=None)]
     rir: Annotated[int | None, Field(ge=0, examples=[2], default=None)]
     notes: Annotated[str | None, Field(max_length=1000, examples=["Felt strong today"], default=None)]
-

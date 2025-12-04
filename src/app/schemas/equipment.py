@@ -21,4 +21,3 @@ class EquipmentUpdate(BaseModel):
 
 class EquipmentRead(EquipmentBase):
     id: int
-

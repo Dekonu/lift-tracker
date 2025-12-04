@@ -16,4 +16,3 @@ CRUDScheduledWorkout = FastCRUD[
     ScheduledWorkoutRead,
 ]
 crud_scheduled_workout = CRUDScheduledWorkout(ScheduledWorkout)
-
