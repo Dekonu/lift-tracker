@@ -33,16 +33,24 @@ try:
     from ...schemas.program import ProgramRead
     from ...schemas.scheduled_workout import ScheduledWorkoutRead
     from ...schemas.set_entry import SetEntryRead
-    from ...schemas.template_exercise_entry import TemplateExerciseEntryRead
-    from ...schemas.template_set_entry import TemplateSetEntryRead
+    from ...schemas.template_exercise_entry import (
+        TemplateExerciseEntryCreate,
+        TemplateExerciseEntryRead,
+    )
+    from ...schemas.template_set_entry import TemplateSetEntryCreate, TemplateSetEntryRead
     from ...schemas.workout_session import WorkoutSessionRead
-    from ...schemas.workout_template import WorkoutTemplateRead
+    from ...schemas.workout_template import (
+        WorkoutTemplateCreate,
+        WorkoutTemplateRead,
+    )
 
     # Update module namespaces with forward references so Pydantic can resolve them
     # Pydantic looks for forward references in the module where the model is defined
     scheduled_workout_module = sys.modules.get("src.app.schemas.scheduled_workout")
     workout_session_module = sys.modules.get("src.app.schemas.workout_session")
     exercise_entry_module = sys.modules.get("src.app.schemas.exercise_entry")
+    workout_template_module = sys.modules.get("src.app.schemas.workout_template")
+    template_exercise_entry_module = sys.modules.get("src.app.schemas.template_exercise_entry")
 
     if scheduled_workout_module:
         scheduled_workout_module.WorkoutTemplateRead = WorkoutTemplateRead
@@ -55,9 +63,25 @@ try:
     if exercise_entry_module:
         exercise_entry_module.SetEntryRead = SetEntryRead
 
-    # Now rebuild schemas with forward references
+    if workout_template_module:
+        workout_template_module.TemplateExerciseEntryCreate = TemplateExerciseEntryCreate
+        workout_template_module.TemplateExerciseEntryRead = TemplateExerciseEntryRead
+
+    if template_exercise_entry_module:
+        template_exercise_entry_module.TemplateSetEntryCreate = TemplateSetEntryCreate
+        template_exercise_entry_module.TemplateSetEntryRead = TemplateSetEntryRead
+
+    # Now rebuild schemas with forward references (rebuild in dependency order)
+    # 1. TemplateSetEntryCreate and TemplateSetEntryRead have no forward refs
+    TemplateSetEntryCreate.model_rebuild()
     TemplateSetEntryRead.model_rebuild()
+    # 2. TemplateExerciseEntryCreate depends on TemplateSetEntryCreate
+    #    TemplateExerciseEntryRead depends on TemplateSetEntryRead
+    TemplateExerciseEntryCreate.model_rebuild()
     TemplateExerciseEntryRead.model_rebuild()
+    # 3. WorkoutTemplateCreate depends on TemplateExerciseEntryCreate
+    #    WorkoutTemplateRead depends on TemplateExerciseEntryRead
+    WorkoutTemplateCreate.model_rebuild()
     WorkoutTemplateRead.model_rebuild()
     ScheduledWorkoutRead.model_rebuild()
     WorkoutSessionRead.model_rebuild()

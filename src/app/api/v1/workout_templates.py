@@ -19,6 +19,9 @@ from ...schemas.template_exercise_entry import TemplateExerciseEntryCreate
 from ...schemas.template_set_entry import TemplateSetEntryCreate
 from ...schemas.workout_template import WorkoutTemplateCreate, WorkoutTemplateRead, WorkoutTemplateUpdate
 
+# Note: Schema rebuilds are handled in src/app/api/v1/__init__.py
+# to ensure all forward references are resolved in the correct order
+
 router = APIRouter(tags=["workout-templates"])
 
 
