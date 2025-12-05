@@ -2,13 +2,14 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastcrud.paginated import PaginatedListResponse, compute_offset
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ...api.dependencies import get_current_user, get_optional_user
 from ...core.db.database import async_get_db
-from ...core.exceptions.http_exceptions import NotFoundException
+from ...core.exceptions.http_exceptions import DuplicateValueException, NotFoundException
 from ...crud.crud_template_exercise_entry import crud_template_exercise_entry
 from ...crud.crud_template_set_entry import crud_template_set_entry
 from ...crud.crud_workout_template import crud_workout_template
@@ -33,6 +34,7 @@ async def create_workout_template(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutTemplateRead:
     """Create a new workout template with exercises and sets."""
+    # Validation happens automatically via Pydantic - if we get here, template is valid
     # Set user_id if not provided
     template_dict = template.model_dump(exclude={"template_exercises"})
     if template_dict.get("user_id") is None:
@@ -40,9 +42,25 @@ async def create_workout_template(
     elif template_dict.get("user_id") != current_user["id"]:
         raise NotFoundException("Cannot create template for another user")
 
-    # Create the template
-    template_create = WorkoutTemplateCreate(**template_dict)
-    created_template = await crud_workout_template.create(db=db, object=template_create)
+    # Check if template name already exists for this user
+    existing_template = await crud_workout_template.get(
+        db=db, name=template_dict["name"], user_id=current_user["id"]
+    )
+    if existing_template:
+        raise DuplicateValueException(f"Workout template with name '{template_dict['name']}' already exists")
+
+    # Create the template (exclude template_exercises as it's not a model field)
+    # FastCRUD expects a Pydantic model, so we create one without template_exercises
+    # Create a simple Pydantic model with only the database fields
+    class TemplateForDB(BaseModel):
+        name: str
+        description: str | None = None
+        is_public: bool = False
+        estimated_duration_minutes: int | None = None
+        user_id: int | None = None
+    
+    template_create_obj = TemplateForDB(**template_dict)
+    created_template = await crud_workout_template.create(db=db, object=template_create_obj)
     await db.flush()
 
     # Create template exercises and sets
@@ -52,8 +70,16 @@ async def create_workout_template(
         exercise_dict["workout_template_id"] = created_template.id
         exercise_dict["order"] = exercise_data.order if exercise_data.order is not None else exercise_idx
 
-        exercise_create = TemplateExerciseEntryCreate(**exercise_dict)
-        created_exercise = await crud_template_exercise_entry.create(db=db, object=exercise_create)
+        # Create exercise entry (template_sets is excluded, it's a relationship not a field)
+        # Create a Pydantic model without template_sets for FastCRUD
+        class ExerciseForDB(BaseModel):
+            workout_template_id: int | None = None
+            exercise_id: int
+            notes: str | None = None
+            order: int = 0
+        
+        exercise_create_obj = ExerciseForDB(**exercise_dict)
+        created_exercise = await crud_template_exercise_entry.create(db=db, object=exercise_create_obj)
         await db.flush()
 
         # Create sets for this exercise
@@ -63,6 +89,7 @@ async def create_workout_template(
             set_dict["template_exercise_entry_id"] = created_exercise.id
             set_dict["set_number"] = set_data.set_number if set_data.set_number else (set_idx + 1)
 
+            # Create a Pydantic model for the set (TemplateSetEntryCreate is fine as it doesn't have relationships)
             set_create = TemplateSetEntryCreate(**set_dict)
             await crud_template_set_entry.create(db=db, object=set_create)
 
@@ -208,6 +235,15 @@ async def update_workout_template(
         raise NotFoundException("Cannot update template owned by another user")
 
     update_data = template_update.model_dump(exclude_unset=True)
+    
+    # Check if name is being updated and if it conflicts with another template
+    if "name" in update_data:
+        conflicting_template = await crud_workout_template.get(
+            db=db, name=update_data["name"], user_id=current_user["id"]
+        )
+        if conflicting_template and conflicting_template.id != template_id:
+            raise DuplicateValueException(f"Workout template with name '{update_data['name']}' already exists")
+    
     if update_data:
         await crud_workout_template.update(db=db, object=update_data, id=template_id)
         await db.commit()

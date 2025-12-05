@@ -43,6 +43,7 @@ try:
         WorkoutTemplateCreate,
         WorkoutTemplateRead,
     )
+    from ...schemas.program_day_assignment import ProgramDayAssignmentRead
 
     # Update module namespaces with forward references so Pydantic can resolve them
     # Pydantic looks for forward references in the module where the model is defined
@@ -51,6 +52,7 @@ try:
     exercise_entry_module = sys.modules.get("src.app.schemas.exercise_entry")
     workout_template_module = sys.modules.get("src.app.schemas.workout_template")
     template_exercise_entry_module = sys.modules.get("src.app.schemas.template_exercise_entry")
+    program_day_assignment_module = sys.modules.get("src.app.schemas.program_day_assignment")
 
     if scheduled_workout_module:
         scheduled_workout_module.WorkoutTemplateRead = WorkoutTemplateRead
@@ -71,6 +73,9 @@ try:
         template_exercise_entry_module.TemplateSetEntryCreate = TemplateSetEntryCreate
         template_exercise_entry_module.TemplateSetEntryRead = TemplateSetEntryRead
 
+    if program_day_assignment_module:
+        program_day_assignment_module.WorkoutTemplateRead = WorkoutTemplateRead
+
     # Now rebuild schemas with forward references (rebuild in dependency order)
     # 1. TemplateSetEntryCreate and TemplateSetEntryRead have no forward refs
     TemplateSetEntryCreate.model_rebuild()
@@ -83,6 +88,8 @@ try:
     #    WorkoutTemplateRead depends on TemplateExerciseEntryRead
     WorkoutTemplateCreate.model_rebuild()
     WorkoutTemplateRead.model_rebuild()
+    # 4. ProgramDayAssignmentRead depends on WorkoutTemplateRead
+    ProgramDayAssignmentRead.model_rebuild()
     ScheduledWorkoutRead.model_rebuild()
     WorkoutSessionRead.model_rebuild()
     ExerciseEntryRead.model_rebuild()

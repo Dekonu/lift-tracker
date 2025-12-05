@@ -1,20 +1,56 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TemplateSetEntryBase(BaseModel):
     set_number: Annotated[int, Field(gt=0)]
-    weight_kg: Annotated[float | None, Field(gt=0, default=None)]
-    reps: Annotated[int | None, Field(gt=0, default=None)]
+    weight_kg: Annotated[float | None, Field(default=None)]
+    reps: Annotated[int | None, Field(default=None)]
     rir: Annotated[int | None, Field(ge=0, le=5, default=None, examples=[2])]  # Reps in Reserve
     rpe: Annotated[float | None, Field(ge=1.0, le=10.0, default=None, examples=[8.0])]  # Rate of Perceived Exertion
-    percentage_of_1rm: Annotated[float | None, Field(gt=0, le=100, default=None, examples=[85.0])]
-    rest_seconds: Annotated[int | None, Field(gt=0, default=None, examples=[180])]
+    percentage_of_1rm: Annotated[float | None, Field(default=None)]
+    rest_seconds: Annotated[int | None, Field(default=None)]
     tempo: Annotated[str | None, Field(max_length=20, default=None, examples=["3-1-1-0"])]
     notes: Annotated[str | None, Field(max_length=200, default=None)]
     is_warmup: Annotated[bool, Field(default=False)]
+
+    @field_validator("weight_kg")
+    @classmethod
+    def validate_weight_kg(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)) and v <= 0:
+            raise ValueError("weight_kg must be greater than 0 if provided")
+        return v
+
+    @field_validator("reps")
+    @classmethod
+    def validate_reps(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, int) and v <= 0:
+            raise ValueError("reps must be greater than 0 if provided")
+        return v
+
+    @field_validator("percentage_of_1rm")
+    @classmethod
+    def validate_percentage_of_1rm(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, (int, float)) and (v <= 0 or v > 100):
+            raise ValueError("percentage_of_1rm must be greater than 0 and less than or equal to 100 if provided")
+        return v
+
+    @field_validator("rest_seconds")
+    @classmethod
+    def validate_rest_seconds(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, int) and v <= 0:
+            raise ValueError("rest_seconds must be greater than 0 if provided")
+        return v
 
 
 class TemplateSetEntryCreate(TemplateSetEntryBase):

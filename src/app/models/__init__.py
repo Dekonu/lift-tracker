@@ -11,6 +11,7 @@ from .one_rm import OneRM
 from .post import Post
 from .program import Program
 from .program_week import ProgramWeek
+from .program_day_assignment import ProgramDayAssignment
 from .rate_limit import RateLimit
 from .scheduled_workout import ScheduledWorkout
 from .set import Set, WeightType, WeightUnit

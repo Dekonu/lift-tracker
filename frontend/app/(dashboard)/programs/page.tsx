@@ -5,7 +5,7 @@ import { usePrograms, useCreateProgram, useScheduleProgram, useWorkoutTemplates 
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import Link from "next/link";
-import ProgramWeekEditor from "./components/ProgramWeekEditor";
+import ProgramDayEditor from "./components/ProgramDayEditor";
 
 export default function ProgramsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -16,12 +16,12 @@ export default function ProgramsPage() {
   const createProgram = useCreateProgram();
   const scheduleProgram = useScheduleProgram();
 
-  // Fetch program weeks
-  const { data: programWeeks = [] } = useQuery({
-    queryKey: ["program-weeks", selectedProgram],
+  // Fetch program day assignments
+  const { data: dayAssignments = [] } = useQuery({
+    queryKey: ["program-day-assignments", selectedProgram],
     queryFn: async () => {
       if (!selectedProgram) return [];
-      const response = await apiClient.get(`/program/${selectedProgram}/weeks`);
+      const response = await apiClient.get(`/program/${selectedProgram}/days`);
       return response.data.data || [];
     },
     enabled: !!selectedProgram,
@@ -343,7 +343,7 @@ export default function ProgramsPage() {
 
         {/* Program Week Editor */}
         {editingProgram && (
-          <ProgramWeekEditor
+          <ProgramDayEditor
             programId={editingProgram}
             durationWeeks={programs.find((p: any) => p.id === editingProgram)?.duration_weeks || 4}
             daysPerWeek={programs.find((p: any) => p.id === editingProgram)?.days_per_week || 3}

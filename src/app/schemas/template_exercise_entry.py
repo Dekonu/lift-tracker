@@ -14,7 +14,7 @@ class TemplateExerciseEntryBase(BaseModel):
 
 
 class TemplateExerciseEntryCreate(TemplateExerciseEntryBase):
-    workout_template_id: int
+    workout_template_id: int | None = None  # Will be set when creating
     template_sets: list["TemplateSetEntryCreate"] = []  # noqa: F821
 
 
