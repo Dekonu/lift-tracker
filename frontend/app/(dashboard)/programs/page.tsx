@@ -307,9 +307,9 @@ export default function ProgramsPage() {
                 </button>
               </div>
               <div className="space-y-4">
-                {programWeeks.length === 0 ? (
+                {dayAssignments.length === 0 ? (
                   <div className="text-center py-8">
-                    <p className="text-neutral-500 mb-4">No weeks defined for this program.</p>
+                    <p className="text-neutral-500 mb-4">No workout templates assigned to this program yet.</p>
                     <button
                       onClick={() => {
                         setSelectedProgram(null);
@@ -321,20 +321,66 @@ export default function ProgramsPage() {
                     </button>
                   </div>
                 ) : (
-                  programWeeks.map((week: any, index: number) => (
-                    <div key={week.id} className="card p-4">
-                      <div className="font-semibold text-neutral-900 mb-2">Week {week.week_number}</div>
-                      {week.workout_template_id && (
-                        <div className="text-sm text-neutral-600 mb-1">
-                          <span className="font-medium">Template:</span>{" "}
-                          {templates.find((t: any) => t.id === week.workout_template_id)?.name || "Unknown"}
-                        </div>
-                      )}
-                      {week.notes && (
-                        <div className="text-sm text-neutral-500 mt-2">{week.notes}</div>
-                      )}
-                    </div>
-                  ))
+                  <div className="space-y-4">
+                    {/* Group assignments by week */}
+                    {Array.from(
+                      new Set(dayAssignments.map((a: any) => a.week_number))
+                    )
+                      .sort((a, b) => a - b)
+                      .map((weekNumber: number) => {
+                        const weekAssignments = dayAssignments.filter(
+                          (a: any) => a.week_number === weekNumber
+                        );
+                        // Group by day
+                        const dayGroups: Record<number, any[]> = {};
+                        weekAssignments.forEach((assignment: any) => {
+                          if (!dayGroups[assignment.day_number]) {
+                            dayGroups[assignment.day_number] = [];
+                          }
+                          dayGroups[assignment.day_number].push(assignment);
+                        });
+
+                        return (
+                          <div key={weekNumber} className="card p-4">
+                            <div className="font-semibold text-neutral-900 mb-3">
+                              Week {weekNumber}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {Object.keys(dayGroups)
+                                .sort((a, b) => Number(a) - Number(b))
+                                .map((dayNum) => {
+                                  const dayAssigns = dayGroups[Number(dayNum)];
+                                  return (
+                                    <div
+                                      key={dayNum}
+                                      className="border border-neutral-200 rounded-lg p-3 bg-neutral-50"
+                                    >
+                                      <div className="font-medium text-sm text-neutral-700 mb-2">
+                                        Day {dayNum}
+                                      </div>
+                                      <div className="space-y-1">
+                                        {dayAssigns.map((assignment: any) => {
+                                          const template = templates.find(
+                                            (t: any) => t.id === assignment.workout_template_id
+                                          );
+                                          return (
+                                            <div
+                                              key={assignment.id}
+                                              className="text-sm text-neutral-600 bg-white px-2 py-1 rounded border border-neutral-200"
+                                            >
+                                              {template?.name || "Unknown Template"}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
                 )}
               </div>
             </div>
