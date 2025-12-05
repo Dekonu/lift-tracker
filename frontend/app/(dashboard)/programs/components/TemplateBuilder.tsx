@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useExercises } from "@/lib/hooks/use-exercises";
 import { apiClient } from "@/lib/api/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateSetsForPeriodization, type SetConfig } from "@/lib/utils/periodization";
 
 interface TemplateExercise {
+  id?: number; // For editing existing exercises
   exercise_id: number;
   exercise_name: string;
   sets: SetConfig[];
@@ -19,6 +20,7 @@ interface TemplateBuilderProps {
   onTemplateCreated?: (templateId: number) => void;
   periodizationType?: "linear" | "undulating" | "block";
   programWeeks?: number;
+  templateId?: number; // If provided, edit existing template
 }
 
 export default function TemplateBuilder({
@@ -38,13 +40,65 @@ export default function TemplateBuilder({
   const { data: exercisesList = [], isLoading: exercisesLoading } = useExercises();
   const queryClient = useQueryClient();
 
+  // Load existing template if editing
+  const { data: existingTemplate, isLoading: templateLoading } = useQuery({
+    queryKey: ["workout-template", templateId],
+    queryFn: async () => {
+      const response = await apiClient.get(`/workout-template/${templateId}`);
+      return response.data;
+    },
+    enabled: !!templateId,
+  });
+
+  // Populate form when editing
+  useEffect(() => {
+    if (existingTemplate && templateId) {
+      setTemplateName(existingTemplate.name || "");
+      setTemplateDescription(existingTemplate.description || "");
+      setEstimatedDuration(existingTemplate.estimated_duration_minutes || null);
+      
+      if (existingTemplate.template_exercises) {
+        const loadedExercises: TemplateExercise[] = existingTemplate.template_exercises.map((te: any) => ({
+          id: te.id, // Include ID for updates
+          exercise_id: te.exercise_id,
+          exercise_name: exercisesList.find((e: any) => e.id === te.exercise_id)?.name || `Exercise ${te.exercise_id}`,
+          sets: (te.template_sets || []).map((set: any) => ({
+            id: set.id, // Include ID for updates
+            set_number: set.set_number,
+            reps: set.reps || null,
+            weight_kg: set.weight_kg || null,
+            percentage_of_1rm: set.percentage_of_1rm || null,
+            rir: set.rir || null,
+            rpe: set.rpe || null,
+            rest_seconds: set.rest_seconds || null,
+            tempo: set.tempo || null,
+            notes: set.notes || null,
+            is_warmup: set.is_warmup || false,
+          })),
+          notes: te.notes || "",
+          order: te.order || 0,
+        }));
+        setExercises(loadedExercises);
+      }
+    }
+  }, [existingTemplate, exercisesList, templateId]);
+
   const createTemplate = useMutation({
     mutationFn: async (templateData: any) => {
-      const response = await apiClient.post("/workout-template", templateData);
-      return response.data;
+      if (templateId) {
+        // Update existing template
+        const response = await apiClient.patch(`/workout-template/${templateId}`, templateData);
+        return response.data;
+      } else {
+        // Create new template
+        const response = await apiClient.post("/workout-template", templateData);
+        return response.data;
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["workout-templates"] });
+      queryClient.invalidateQueries({ queryKey: ["workout-template", templateId] });
+      queryClient.invalidateQueries({ queryKey: ["program-day-assignments"] });
       if (onTemplateCreated) {
         onTemplateCreated(data.id);
       }
@@ -130,10 +184,12 @@ export default function TemplateBuilder({
       estimated_duration_minutes: estimatedDuration,
       is_public: false,
       template_exercises: exercises.map((ex) => ({
+        ...(ex.id && { id: ex.id }), // Include ID if editing
         exercise_id: ex.exercise_id,
         notes: ex.notes || null,
         order: ex.order,
         template_sets: ex.sets.map((set, setIdx) => ({
+          ...(set.id && { id: set.id }), // Include ID if editing
           set_number: set.set_number && set.set_number > 0 ? set.set_number : setIdx + 1,
           reps: set.reps && set.reps > 0 ? set.reps : null,
           weight_kg: set.weight_kg && set.weight_kg > 0 ? set.weight_kg : null,
@@ -141,8 +197,8 @@ export default function TemplateBuilder({
           rir: set.rir !== null && set.rir !== undefined ? set.rir : null,
           rpe: set.rpe !== null && set.rpe !== undefined ? set.rpe : null,
           rest_seconds: set.rest_seconds && set.rest_seconds > 0 ? set.rest_seconds : null,
-          tempo: null,
-          notes: null,
+          tempo: set.tempo || null,
+          notes: set.notes || null,
           is_warmup: set.is_warmup || false,
         })),
       })),
@@ -155,7 +211,9 @@ export default function TemplateBuilder({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-strong">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-neutral-900">Create Workout Template</h2>
+          <h2 className="text-2xl font-bold text-neutral-900">
+            {templateId ? "Edit Workout Template" : "Create Workout Template"}
+          </h2>
           <button
             onClick={onClose}
             className="text-neutral-500 hover:text-neutral-700 text-2xl leading-none"

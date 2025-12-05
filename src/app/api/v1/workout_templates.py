@@ -221,9 +221,15 @@ async def update_workout_template(
     db: Annotated[AsyncSession, Depends(async_get_db)],
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> WorkoutTemplateRead:
-    """Update a workout template (only owner can update)."""
-    # Fetch template to check ownership
-    stmt = select(WorkoutTemplate).where(WorkoutTemplate.id == template_id)
+    """Update a workout template including exercises and sets (only owner can update)."""
+    # Fetch template to check ownership and get existing exercises
+    stmt = (
+        select(WorkoutTemplate)
+        .where(WorkoutTemplate.id == template_id)
+        .options(
+            selectinload(WorkoutTemplate.template_exercises).selectinload(TemplateExerciseEntry.template_sets)
+        )
+    )
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
 
@@ -244,9 +250,133 @@ async def update_workout_template(
         if conflicting_template and conflicting_template.id != template_id:
             raise DuplicateValueException(f"Workout template with name '{update_data['name']}' already exists")
     
+    # Handle template_exercises update if provided
+    template_exercises_data = update_data.pop("template_exercises", None)
+    
+    # Update basic template fields
     if update_data:
         await crud_workout_template.update(db=db, object=update_data, id=template_id)
-        await db.commit()
+    
+    # Handle exercises and sets update
+    if template_exercises_data is not None:
+        
+        # Get existing exercise entry IDs
+        existing_exercise_ids = {ex.id for ex in existing.template_exercises}
+        
+        # Process each exercise in the update
+        new_exercise_ids = set()
+        for exercise_data in template_exercises_data:
+            exercise_dict = exercise_data if isinstance(exercise_data, dict) else exercise_data.model_dump()
+            exercise_id = exercise_dict.get("id")  # If provided, this is an update
+            
+            if exercise_id and exercise_id in existing_exercise_ids:
+                # Update existing exercise entry
+                exercise_update_data = {
+                    "exercise_id": exercise_dict.get("exercise_id"),
+                    "notes": exercise_dict.get("notes"),
+                    "order": exercise_dict.get("order"),
+                }
+                exercise_update_data = {k: v for k, v in exercise_update_data.items() if v is not None}
+                
+                if exercise_update_data:
+                    await crud_template_exercise_entry.update(
+                        db=db, object=exercise_update_data, id=exercise_id
+                    )
+                
+                # Get existing exercise entry to update sets
+                existing_exercise = next((ex for ex in existing.template_exercises if ex.id == exercise_id), None)
+                if existing_exercise:
+                    # Handle sets update
+                    sets_data = exercise_dict.get("template_sets", [])
+                    existing_set_ids = {s.id for s in existing_exercise.template_sets}
+                    new_set_ids = set()
+                    
+                    for set_data in sets_data:
+                        set_dict = set_data if isinstance(set_data, dict) else set_data.model_dump()
+                        set_id = set_dict.get("id")  # If provided, this is an update
+                        
+                        if set_id and set_id in existing_set_ids:
+                            # Update existing set
+                            set_update_data = {
+                                "set_number": set_dict.get("set_number"),
+                                "weight_kg": set_dict.get("weight_kg"),
+                                "reps": set_dict.get("reps"),
+                                "rir": set_dict.get("rir"),
+                                "rpe": set_dict.get("rpe"),
+                                "percentage_of_1rm": set_dict.get("percentage_of_1rm"),
+                                "rest_seconds": set_dict.get("rest_seconds"),
+                                "tempo": set_dict.get("tempo"),
+                                "notes": set_dict.get("notes"),
+                                "is_warmup": set_dict.get("is_warmup"),
+                            }
+                            set_update_data = {k: v for k, v in set_update_data.items() if v is not None}
+                            
+                            if set_update_data:
+                                await crud_template_set_entry.update(
+                                    db=db, object=set_update_data, id=set_id
+                                )
+                            new_set_ids.add(set_id)
+                        else:
+                            # Create new set
+                            set_create_data = TemplateSetEntryCreate(
+                                template_exercise_entry_id=exercise_id,
+                                set_number=set_dict.get("set_number", 1),
+                                weight_kg=set_dict.get("weight_kg"),
+                                reps=set_dict.get("reps"),
+                                rir=set_dict.get("rir"),
+                                rpe=set_dict.get("rpe"),
+                                percentage_of_1rm=set_dict.get("percentage_of_1rm"),
+                                rest_seconds=set_dict.get("rest_seconds"),
+                                tempo=set_dict.get("tempo"),
+                                notes=set_dict.get("notes"),
+                                is_warmup=set_dict.get("is_warmup", False),
+                            )
+                            created_set = await crud_template_set_entry.create(db=db, object=set_create_data)
+                            new_set_ids.add(created_set.id)
+                    
+                    # Delete sets that are no longer in the update
+                    sets_to_delete = existing_set_ids - new_set_ids
+                    for set_id in sets_to_delete:
+                        await crud_template_set_entry.db_delete(db=db, id=set_id)
+                
+                new_exercise_ids.add(exercise_id)
+            else:
+                # Create new exercise entry
+                exercise_create_data = TemplateExerciseEntryCreate(
+                    workout_template_id=template_id,
+                    exercise_id=exercise_dict.get("exercise_id"),
+                    notes=exercise_dict.get("notes"),
+                    order=exercise_dict.get("order", 0),
+                    template_sets=[],
+                )
+                created_exercise = await crud_template_exercise_entry.create(db=db, object=exercise_create_data)
+                new_exercise_ids.add(created_exercise.id)
+                
+                # Create sets for the new exercise
+                sets_data = exercise_dict.get("template_sets", [])
+                for set_data in sets_data:
+                    set_dict = set_data if isinstance(set_data, dict) else set_data.model_dump()
+                    set_create_data = TemplateSetEntryCreate(
+                        template_exercise_entry_id=created_exercise.id,
+                        set_number=set_dict.get("set_number", 1),
+                        weight_kg=set_dict.get("weight_kg"),
+                        reps=set_dict.get("reps"),
+                        rir=set_dict.get("rir"),
+                        rpe=set_dict.get("rpe"),
+                        percentage_of_1rm=set_dict.get("percentage_of_1rm"),
+                        rest_seconds=set_dict.get("rest_seconds"),
+                        tempo=set_dict.get("tempo"),
+                        notes=set_dict.get("notes"),
+                        is_warmup=set_dict.get("is_warmup", False),
+                    )
+                    await crud_template_set_entry.create(db=db, object=set_create_data)
+        
+        # Delete exercises that are no longer in the update
+        exercises_to_delete = existing_exercise_ids - new_exercise_ids
+        for exercise_id in exercises_to_delete:
+            await crud_template_exercise_entry.db_delete(db=db, id=exercise_id)
+    
+    await db.commit()
 
     # Fetch updated template with relationships
     stmt = (

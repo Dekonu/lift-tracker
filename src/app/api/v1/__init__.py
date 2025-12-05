@@ -42,6 +42,7 @@ try:
     from ...schemas.workout_template import (
         WorkoutTemplateCreate,
         WorkoutTemplateRead,
+        WorkoutTemplateUpdate,
     )
     from ...schemas.program_day_assignment import ProgramDayAssignmentRead
 
@@ -86,8 +87,10 @@ try:
     TemplateExerciseEntryRead.model_rebuild()
     # 3. WorkoutTemplateCreate depends on TemplateExerciseEntryCreate
     #    WorkoutTemplateRead depends on TemplateExerciseEntryRead
+    #    WorkoutTemplateUpdate depends on TemplateExerciseEntryCreate
     WorkoutTemplateCreate.model_rebuild()
     WorkoutTemplateRead.model_rebuild()
+    WorkoutTemplateUpdate.model_rebuild()
     # 4. ProgramDayAssignmentRead depends on WorkoutTemplateRead
     ProgramDayAssignmentRead.model_rebuild()
     ScheduledWorkoutRead.model_rebuild()

@@ -6,11 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import Link from "next/link";
 import ProgramDayEditor from "./components/ProgramDayEditor";
+import TemplateViewModal from "./components/TemplateViewModal";
 
 export default function ProgramsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<number | null>(null);
   const [editingProgram, setEditingProgram] = useState<number | null>(null);
+  const [viewingTemplateId, setViewingTemplateId] = useState<number | null>(null);
   const { data: programs = [], isLoading } = usePrograms();
   const { data: templates = [] } = useWorkoutTemplates();
   const createProgram = useCreateProgram();
@@ -364,12 +366,13 @@ export default function ProgramsPage() {
                                             (t: any) => t.id === assignment.workout_template_id
                                           );
                                           return (
-                                            <div
+                                            <button
                                               key={assignment.id}
-                                              className="text-sm text-neutral-600 bg-white px-2 py-1 rounded border border-neutral-200"
+                                              onClick={() => setViewingTemplateId(assignment.workout_template_id)}
+                                              className="w-full text-left text-sm text-neutral-600 bg-white px-2 py-1 rounded border border-neutral-200 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-700 transition-colors cursor-pointer"
                                             >
                                               {template?.name || "Unknown Template"}
-                                            </div>
+                                            </button>
                                           );
                                         })}
                                       </div>
@@ -395,6 +398,14 @@ export default function ProgramsPage() {
             daysPerWeek={programs.find((p: any) => p.id === editingProgram)?.days_per_week || 3}
             periodizationType={programs.find((p: any) => p.id === editingProgram)?.periodization_type || "linear"}
             onClose={() => setEditingProgram(null)}
+          />
+        )}
+
+        {/* Template View Modal */}
+        {viewingTemplateId && (
+          <TemplateViewModal
+            templateId={viewingTemplateId}
+            onClose={() => setViewingTemplateId(null)}
           />
         )}
       </div>

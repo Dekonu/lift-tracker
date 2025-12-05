@@ -24,6 +24,7 @@ class WorkoutTemplateUpdate(BaseModel):
     description: str | None = None
     is_public: bool | None = None
     estimated_duration_minutes: int | None = None
+    template_exercises: list["TemplateExerciseEntryCreate"] | None = None  # noqa: F821
 
 
 class WorkoutTemplateRead(WorkoutTemplateBase):
