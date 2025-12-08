@@ -11,6 +11,7 @@ class ExerciseBase(BaseModel):
     secondary_muscle_group_ids: Annotated[list[int], Field(default_factory=list, examples=[[2, 3]])]
     equipment_ids: Annotated[list[int], Field(default_factory=list, examples=[[1, 2]])]  # Required equipment
     enabled: Annotated[bool, Field(default=True, examples=[True])]
+    is_core: Annotated[bool, Field(default=False, examples=[False])]
 
     @field_validator("name", mode="before")
     @classmethod
@@ -27,6 +28,7 @@ class ExerciseRead(ExerciseBase):
     secondary_muscle_group_ids: list[int] = []
     equipment_ids: list[int] = []
     enabled: bool = True
+    is_core: bool = False
     # Additional fields for display (optional, will be populated by API)
     primary_muscle_group_names: list[str] = Field(default_factory=list)
     secondary_muscle_group_names: list[str] = Field(default_factory=list)
@@ -65,6 +67,7 @@ class ExerciseUpdate(BaseModel):
     secondary_muscle_group_ids: Annotated[list[int] | None, Field(default=None, examples=[[2, 3]])]
     equipment_ids: Annotated[list[int] | None, Field(default=None, examples=[[1, 2]])]
     enabled: Annotated[bool | None, Field(default=None, examples=[True, False])]
+    is_core: Annotated[bool | None, Field(default=None, examples=[True, False])]
 
     @field_validator("name", mode="before")
     @classmethod

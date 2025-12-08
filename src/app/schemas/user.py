@@ -1,9 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from ..core.schemas import PersistentDeletion, TimestampSchema, UUIDSchema
+from ..models.user import Gender, NetWeightGoal, StrengthGoal
 
 
 class UserBase(BaseModel):
@@ -26,6 +27,13 @@ class UserRead(BaseModel):
     profile_image_url: str
     tier_id: int | None
     is_superuser: bool = False
+    gender: Gender | None = None
+    weight_lbs: float | None = None
+    height_ft: int | None = None
+    height_in: int | None = None
+    birthdate: date | None = None
+    net_weight_goal: NetWeightGoal | None = None
+    strength_goals: list[StrengthGoal] | None = None
 
 
 class UserCreate(UserBase):
@@ -39,7 +47,10 @@ class UserCreateInternal(UserBase):
 
 
 class UserUpdate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(
+        extra="forbid",
+        use_enum_values=True,  # Use enum values instead of enum names when serializing
+    )
 
     name: Annotated[str | None, Field(min_length=2, max_length=30, examples=["User Userberg"], default=None)]
     email: Annotated[EmailStr | None, Field(examples=["user.userberg@example.com"], default=None)]
@@ -49,6 +60,13 @@ class UserUpdate(BaseModel):
             pattern=r"^(https?|ftp)://[^\s/$.?#].[^\s]*$", examples=["https://www.profileimageurl.com"], default=None
         ),
     ]
+    gender: Annotated[Gender | None, Field(default=None, examples=[Gender.MALE])]
+    weight_lbs: Annotated[float | None, Field(gt=0, default=None, examples=[159.0])]
+    height_ft: Annotated[int | None, Field(ge=0, le=8, default=None, examples=[5])]
+    height_in: Annotated[int | None, Field(ge=0, lt=12, default=None, examples=[9])]
+    birthdate: Annotated[date | None, Field(default=None, examples=["1994-03-26"])]
+    net_weight_goal: Annotated[NetWeightGoal | None, Field(default=None, examples=[NetWeightGoal.MAINTAIN])]
+    strength_goals: Annotated[list[StrengthGoal] | None, Field(default=None, examples=[[StrengthGoal.OVERALL_HEALTH, StrengthGoal.PERSONAL_MILESTONES]])]
 
 
 class UserUpdateInternal(UserUpdate):

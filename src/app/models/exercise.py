@@ -21,6 +21,7 @@ class Exercise(Base):
 
     # Fields with defaults last
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    is_core: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
     # Relationships
     exercise_instances: Mapped[list["ExerciseInstance"]] = relationship(  # noqa: F821

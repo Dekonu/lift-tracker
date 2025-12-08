@@ -69,9 +69,12 @@ export default function DashboardLayout({
             </div>
             <div className="flex items-center space-x-4">
               <div className="hidden sm:flex items-center space-x-3">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-semibold text-sm">
+                <Link
+                  href="/profile"
+                  className="h-8 w-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-semibold text-sm hover:scale-105 transition-transform duration-200 cursor-pointer"
+                >
                   {user.name?.charAt(0).toUpperCase() || "U"}
-                </div>
+                </Link>
                 <span className="text-neutral-700 text-sm font-medium">Welcome, {user.name}</span>
               </div>
               <button

@@ -1,12 +1,41 @@
 import uuid as uuid_pkg
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from enum import Enum as PyEnum
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import ARRAY, Date, DateTime, Enum, Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid6 import uuid7
 
 from ..core.db.database import Base
+
+
+class Gender(str, PyEnum):
+    """User gender options."""
+
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+    PREFER_NOT_TO_SAY = "prefer_not_to_say"
+
+
+class NetWeightGoal(str, PyEnum):
+    """User net weight goal options."""
+
+    GAIN = "gain"
+    LOSE = "lose"
+    MAINTAIN = "maintain"
+
+
+class StrengthGoal(str, PyEnum):
+    """User strength training goal options."""
+
+    OVERALL_HEALTH = "overall_health"
+    COMPETE = "compete"
+    PERSONAL_MILESTONES = "personal_milestones"
+    BODYBUILDING = "bodybuilding"
+    POWERLIFTING = "powerlifting"
+    FUNCTIONAL_STRENGTH = "functional_strength"
 
 
 class User(Base):
@@ -27,3 +56,18 @@ class User(Base):
     is_superuser: Mapped[bool] = mapped_column(default=False)
 
     tier_id: Mapped[int | None] = mapped_column(ForeignKey("tier.id"), index=True, default=None, init=False)
+
+    # Optional personal information fields
+    gender: Mapped[Gender | None] = mapped_column(
+        Enum(Gender, native_enum=False, create_constraint=False, length=20), nullable=True, default=None
+    )
+    weight_lbs: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
+    height_ft: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    height_in: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    birthdate: Mapped[date | None] = mapped_column(Date, nullable=True, default=None)
+    net_weight_goal: Mapped[NetWeightGoal | None] = mapped_column(
+        Enum(NetWeightGoal, native_enum=False, create_constraint=False, length=20), nullable=True, default=None
+    )
+    strength_goals: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(30)), nullable=True, default=None
+    )

@@ -88,7 +88,10 @@ async def patch_user(
         if await crud_users.exists(db=db, email=values.email):
             raise DuplicateValueException("Email is already registered")
 
-    await crud_users.update(db=db, object=values, email=current_user["email"])
+    # Convert enum values to strings to ensure we send the value, not the name
+    update_data = values.model_dump(exclude_unset=True, mode='json')
+    
+    await crud_users.update(db=db, object=update_data, email=current_user["email"])
     return {"message": "User updated"}
 
 
