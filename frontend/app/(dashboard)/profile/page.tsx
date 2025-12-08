@@ -49,17 +49,26 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Determine if any fields are empty (should be editable)
-  const hasEmptyFields = !userData?.gender && !userData?.weight_lbs && !userData?.height_ft && 
-    !userData?.height_in && !userData?.birthdate && !userData?.net_weight_goal && 
-    (!userData?.strength_goals || userData.strength_goals.length === 0);
+  // Determine if any fields have data (should require edit button to modify)
+  const hasAnyData = !!(
+    userData?.gender ||
+    userData?.weight_lbs ||
+    userData?.height_ft ||
+    userData?.height_in ||
+    userData?.birthdate ||
+    userData?.net_weight_goal ||
+    (userData?.strength_goals && userData.strength_goals.length > 0)
+  );
   
-  // If fields are empty, start in edit mode
+  // If no fields have data, start in edit mode (fields are editable by default)
+  // If any field has data, require edit button to be clicked
   useEffect(() => {
-    if (userData && hasEmptyFields) {
+    if (userData && !hasAnyData) {
       setIsEditing(true);
+    } else if (userData && hasAnyData) {
+      setIsEditing(false);
     }
-  }, [userData, hasEmptyFields]);
+  }, [userData, hasAnyData]);
 
   useEffect(() => {
     if (userData) {
@@ -273,7 +282,7 @@ export default function ProfilePage() {
                 Used for personalized program recommendations and progress tracking. Not displayed publicly unless you choose to show it.
               </p>
             </div>
-            {!isEditing && !hasEmptyFields && (
+            {!isEditing && hasAnyData && (
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}

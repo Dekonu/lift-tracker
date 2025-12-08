@@ -25,7 +25,9 @@ class TemplateExerciseEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default_factory=lambda: datetime.now(UTC))
 
     # Relationships
-    workout_template: Mapped["WorkoutTemplate"] = relationship("WorkoutTemplate", back_populates="template_exercises", init=False)  # noqa: F821
+    workout_template: Mapped["WorkoutTemplate"] = relationship(
+        "WorkoutTemplate", back_populates="template_exercises", init=False
+    )  # noqa: F821
     template_sets: Mapped[list["TemplateSetEntry"]] = relationship(  # noqa: F821
         "TemplateSetEntry",
         back_populates="template_exercise_entry",

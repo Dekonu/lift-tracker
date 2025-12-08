@@ -21,7 +21,7 @@ class TemplateSetEntryBase(BaseModel):
     def validate_weight_kg(cls, v):
         if v is None:
             return None
-        if isinstance(v, (int, float)) and v <= 0:
+        if isinstance(v, int | float) and v <= 0:
             raise ValueError("weight_kg must be greater than 0 if provided")
         return v
 
@@ -39,7 +39,7 @@ class TemplateSetEntryBase(BaseModel):
     def validate_percentage_of_1rm(cls, v):
         if v is None:
             return None
-        if isinstance(v, (int, float)) and (v <= 0 or v > 100):
+        if isinstance(v, int | float) and (v <= 0 or v > 100):
             raise ValueError("percentage_of_1rm must be greater than 0 and less than or equal to 100 if provided")
         return v
 

@@ -6,7 +6,7 @@ from ..core.db.database import Base
 
 class ProgramDayAssignment(Base):
     """Assignment of workout templates to specific days (1-7) within a program week.
-    
+
     This allows multiple templates per day and supports flexible scheduling
     where users can start their week on any day.
     """
@@ -27,6 +27,13 @@ class ProgramDayAssignment(Base):
     workout_template: Mapped["WorkoutTemplate"] = relationship("WorkoutTemplate", init=False)  # noqa: F821
 
     __table_args__ = (
-        UniqueConstraint("program_id", "week_number", "day_number", "workout_template_id", "order", name="uq_program_day_assignment"),
+        UniqueConstraint(
+            "program_id",
+            "week_number",
+            "day_number",
+            "workout_template_id",
+            "order",
+            name="uq_program_day_assignment",
+        ),
     )
 

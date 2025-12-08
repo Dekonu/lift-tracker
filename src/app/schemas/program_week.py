@@ -24,13 +24,5 @@ class ProgramWeekUpdate(BaseModel):
     workout_template_id: int | None = None
 
 
-class ProgramWeekUpdate(BaseModel):
-    week_number: int | None = None
-    volume_modifier: float | None = None
-    intensity_modifier: float | None = None
-    notes: str | None = None
-    workout_template_id: int | None = None
-
-
 class ProgramWeekRead(ProgramWeekBase):
     id: int

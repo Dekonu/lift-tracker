@@ -88,8 +88,67 @@ async def patch_user(
         if await crud_users.exists(db=db, email=values.email):
             raise DuplicateValueException("Email is already registered")
 
-    # Convert enum values to strings to ensure we send the value, not the name
-    update_data = values.model_dump(exclude_unset=True, mode='json')
+    # Get the update data, keeping dates as date objects (not strings)
+    # Use mode='python' to get Python objects (not JSON strings) but still convert enums
+    update_data = values.model_dump(exclude_unset=True, mode='python')
+    
+    # Convert enum values to lowercase strings for database compatibility
+    # Handle both enum instances and string values (which may be uppercase)
+    from ...models.user import Gender, NetWeightGoal, StrengthGoal
+    
+    # Mapping from uppercase enum names to lowercase values
+    GENDER_MAP = {name: enum.value for name, enum in Gender.__members__.items()}
+    NET_WEIGHT_GOAL_MAP = {name: enum.value for name, enum in NetWeightGoal.__members__.items()}
+    STRENGTH_GOAL_MAP = {name: enum.value for name, enum in StrengthGoal.__members__.items()}
+    
+    # Helper function to normalize enum values to lowercase strings
+    def normalize_enum_value(value: Any, enum_class: type, enum_map: dict[str, str]) -> str | None:
+        """Convert enum value to lowercase string."""
+        if value is None:
+            return None
+        # Check if it's an enum instance first
+        if isinstance(value, enum_class):
+            return value.value
+        # If it's a string, try to normalize it
+        if isinstance(value, str):
+            # Try to find in map first (handles uppercase enum names like 'MALE')
+            normalized = enum_map.get(value.upper())
+            if normalized:
+                return normalized
+            # If it's already lowercase and valid, return it
+            if value.lower() in enum_map.values():
+                return value.lower()
+            # Fall back to lowercase
+            return value.lower()
+        # For any other type, convert to string and lowercase
+        return str(value).lower()
+    
+    # Normalize gender - always convert if present
+    if "gender" in update_data:
+        original_gender = update_data["gender"]
+        update_data["gender"] = normalize_enum_value(original_gender, Gender, GENDER_MAP)
+    
+    # Normalize net_weight_goal - always convert if present
+    if "net_weight_goal" in update_data:
+        original_goal = update_data["net_weight_goal"]
+        update_data["net_weight_goal"] = normalize_enum_value(original_goal, NetWeightGoal, NET_WEIGHT_GOAL_MAP)
+    
+    # Normalize strength_goals array - always convert if present
+    if "strength_goals" in update_data and update_data["strength_goals"] is not None:
+        normalized_goals = [
+            normalize_enum_value(goal, StrengthGoal, STRENGTH_GOAL_MAP)
+            for goal in update_data["strength_goals"]
+        ]
+        update_data["strength_goals"] = normalized_goals
+    
+    # Ensure all enum values are lowercase strings before database update
+    # Double-check in case something was missed
+    if "gender" in update_data and update_data["gender"] is not None:
+        if isinstance(update_data["gender"], str) and update_data["gender"].isupper():
+            update_data["gender"] = GENDER_MAP.get(update_data["gender"], update_data["gender"].lower())
+    if "net_weight_goal" in update_data and update_data["net_weight_goal"] is not None:
+        if isinstance(update_data["net_weight_goal"], str) and update_data["net_weight_goal"].isupper():
+            update_data["net_weight_goal"] = NET_WEIGHT_GOAL_MAP.get(update_data["net_weight_goal"], update_data["net_weight_goal"].lower())
     
     await crud_users.update(db=db, object=update_data, email=current_user["email"])
     return {"message": "User updated"}

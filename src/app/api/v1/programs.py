@@ -3,7 +3,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Request
 from fastcrud.paginated import PaginatedListResponse, compute_offset, paginated_response
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -347,7 +347,7 @@ async def add_day_assignment(
     current_user: Annotated[dict, Depends(get_current_user)],
 ) -> ProgramDayAssignmentRead:
     """Add a workout template assignment to a specific day (1-7) in a program week.
-    
+
     If an assignment with the same (program_id, week_number, day_number, workout_template_id, order)
     already exists, returns the existing assignment instead of creating a duplicate.
     If order is not specified or would cause a conflict, automatically finds the next available order.
@@ -520,7 +520,9 @@ async def update_day_assignment(
         raise NotFoundException("Day assignment not found")
 
     # Validate day_number if being updated
-    if assignment_update.day_number is not None and (assignment_update.day_number < 1 or assignment_update.day_number > 7):
+    if assignment_update.day_number is not None and (
+        assignment_update.day_number < 1 or assignment_update.day_number > 7
+    ):
         raise NotFoundException("Day number must be between 1 and 7")
 
     update_dict = assignment_update.model_dump(exclude_unset=True)

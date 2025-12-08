@@ -66,7 +66,10 @@ class UserUpdate(BaseModel):
     height_in: Annotated[int | None, Field(ge=0, lt=12, default=None, examples=[9])]
     birthdate: Annotated[date | None, Field(default=None, examples=["1994-03-26"])]
     net_weight_goal: Annotated[NetWeightGoal | None, Field(default=None, examples=[NetWeightGoal.MAINTAIN])]
-    strength_goals: Annotated[list[StrengthGoal] | None, Field(default=None, examples=[[StrengthGoal.OVERALL_HEALTH, StrengthGoal.PERSONAL_MILESTONES]])]
+    strength_goals: Annotated[
+        list[StrengthGoal] | None,
+        Field(default=None, examples=[[StrengthGoal.OVERALL_HEALTH, StrengthGoal.PERSONAL_MILESTONES]]),
+    ]
 
 
 class UserUpdateInternal(UserUpdate):
