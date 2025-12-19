@@ -9,6 +9,25 @@ type Gender = "male" | "female" | "other" | "prefer_not_to_say";
 type NetWeightGoal = "gain" | "lose" | "maintain";
 type StrengthGoal = "overall_health" | "compete" | "personal_milestones" | "bodybuilding" | "powerlifting" | "functional_strength";
 
+interface Exercise {
+  id: number;
+  name: string;
+  is_core: boolean;
+}
+
+interface OneRMRecord {
+  id: number;
+  exercise_id: number;
+  weight_kg: number;
+  is_estimated: boolean;
+  tested_date: string | null;
+  calculation_method: string | null;
+  based_on_weight: number | null;
+  based_on_reps: number | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 interface UserData {
   id: number;
   name: string;
@@ -48,6 +67,43 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Fetch core exercises
+  const { data: exercisesData } = useQuery<{ data: Exercise[]; total_count: number }>({
+    queryKey: ["exercises"],
+    queryFn: async () => {
+      const response = await apiClient.get("/exercises?items_per_page=100");
+      return response.data;
+    },
+    enabled: !!user,
+  });
+
+  // Filter to get only core exercises
+  const coreExercises = exercisesData?.data?.filter(ex => ex.is_core) || [];
+
+  // Fetch user's 1RM records
+  const { data: oneRMData } = useQuery<{ data: OneRMRecord[]; total_count: number }>({
+    queryKey: ["one-rm"],
+    queryFn: async () => {
+      const response = await apiClient.get("/one-rm?items_per_page=100");
+      return response.data;
+    },
+    enabled: !!user,
+  });
+
+  // Create a map of exercise_id -> OneRMRecord for quick lookup
+  const oneRMMap = new Map<number, OneRMRecord>();
+  oneRMData?.data?.forEach(record => {
+    oneRMMap.set(record.exercise_id, record);
+  });
+
+  // State for editing 1RM values
+  const [editingOneRM, setEditingOneRM] = useState<number | null>(null);
+  const [oneRMFormData, setOneRMFormData] = useState<Record<number, { weight_lbs: string; tested_date: string }>>({});
+
+  // Helper functions for kg <-> lbs conversion
+  const kgToLbs = (kg: number): number => kg * 2.20462;
+  const lbsToKg = (lbs: number): number => lbs / 2.20462;
 
   // Determine if any fields have data (should require edit button to modify)
   const hasAnyData = !!(
@@ -526,6 +582,181 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* 1RM Tracker Section */}
+      <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-6 mt-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <h2 className="text-xl font-semibold text-neutral-900">Core Exercise 1RM Tracker</h2>
+              <div className="h-5 w-5 rounded-full bg-primary-100 flex items-center justify-center cursor-help" title="Track your one-rep max for core exercises. These values are used for program recommendations and training load calculations.">
+                <span className="text-primary-600 text-xs font-semibold">?</span>
+              </div>
+            </div>
+            <p className="text-xs text-neutral-500 max-w-2xl">
+              Track your one-rep max for core exercises. Update these values as you progress to get better program recommendations.
+            </p>
+          </div>
+        </div>
+
+        {coreExercises.length === 0 ? (
+          <div className="text-sm text-neutral-500 py-4">
+            No core exercises found. Core exercises need to be marked in the database.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {coreExercises.map((exercise) => {
+              const oneRM = oneRMMap.get(exercise.id);
+              const isEditing = editingOneRM === exercise.id;
+              const formData = oneRMFormData[exercise.id] || { weight_lbs: "", tested_date: "" };
+
+              return (
+                <div key={exercise.id} className="border border-neutral-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-medium text-neutral-900 mb-1">{exercise.name}</h3>
+                      {oneRM && !isEditing && (
+                        <div className="text-sm text-neutral-600">
+                          <span className="font-semibold">{kgToLbs(oneRM.weight_kg).toFixed(1)} lbs</span>
+                          {oneRM.tested_date && (
+                            <span className="ml-2 text-neutral-500">
+                              (Tested: {new Date(oneRM.tested_date).toLocaleDateString()})
+                            </span>
+                          )}
+                          {oneRM.is_estimated && (
+                            <span className="ml-2 text-xs text-neutral-400 italic">(Estimated)</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!isEditing ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingOneRM(exercise.id);
+                            if (oneRM) {
+                              setOneRMFormData({
+                                ...oneRMFormData,
+                                [exercise.id]: {
+                                  weight_lbs: kgToLbs(oneRM.weight_kg).toFixed(1),
+                                  tested_date: oneRM.tested_date ? new Date(oneRM.tested_date).toISOString().split("T")[0] : "",
+                                },
+                              });
+                            } else {
+                              setOneRMFormData({
+                                ...oneRMFormData,
+                                [exercise.id]: { weight_lbs: "", tested_date: "" },
+                              });
+                            }
+                          }}
+                          className="btn-secondary text-sm flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          {oneRM ? "Edit" : "Add"}
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingOneRM(null);
+                              setOneRMFormData({ ...oneRMFormData, [exercise.id]: { weight_lbs: "", tested_date: "" } });
+                            }}
+                            className="btn-secondary text-sm"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!user) return;
+                              const weightLbs = parseFloat(formData.weight_lbs);
+                              if (isNaN(weightLbs) || weightLbs <= 0) {
+                                setSaveMessage({ type: "error", text: "Please enter a valid weight" });
+                                setTimeout(() => setSaveMessage(null), 3000);
+                                return;
+                              }
+
+                              try {
+                                const weightKg = lbsToKg(weightLbs);
+                                const testedDate = formData.tested_date ? new Date(formData.tested_date).toISOString() : null;
+
+                                await apiClient.post("/one-rm", {
+                                  user_id: user.id,
+                                  exercise_id: exercise.id,
+                                  weight_kg: weightKg,
+                                  is_estimated: false,
+                                  tested_date: testedDate,
+                                });
+
+                                queryClient.invalidateQueries({ queryKey: ["one-rm"] });
+                                setEditingOneRM(null);
+                                setSaveMessage({ type: "success", text: "1RM updated successfully!" });
+                                setTimeout(() => setSaveMessage(null), 3000);
+                              } catch (error: any) {
+                                setSaveMessage({
+                                  type: "error",
+                                  text: error.response?.data?.detail || "Failed to update 1RM",
+                                });
+                                setTimeout(() => setSaveMessage(null), 3000);
+                              }
+                            }}
+                            className="btn-primary text-sm"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEditing && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-neutral-200">
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1.5">1RM Weight</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={formData.weight_lbs}
+                            onChange={(e) =>
+                              setOneRMFormData({
+                                ...oneRMFormData,
+                                [exercise.id]: { ...formData, weight_lbs: e.target.value },
+                              })
+                            }
+                            placeholder="225"
+                            className="flex-1 border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          />
+                          <span className="text-neutral-600 font-medium text-sm min-w-[2.5rem]">lbs</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1.5">Tested Date (Optional)</label>
+                        <input
+                          type="date"
+                          value={formData.tested_date}
+                          onChange={(e) =>
+                            setOneRMFormData({
+                              ...oneRMFormData,
+                              [exercise.id]: { ...formData, tested_date: e.target.value },
+                            })
+                          }
+                          className="w-full border border-neutral-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
