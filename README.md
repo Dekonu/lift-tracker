@@ -75,6 +75,8 @@ The application includes comprehensive infrastructure for advanced features:
 
 ✅ **Implemented:**
 - User profiles with goals, experience levels, and training preferences
+- **User personal info** (gender, weight, height, birthdate, net_weight_goal, strength_goals) via `GET`/`PATCH` `/api/v1/user/me/`
+- **Core exercise flag** (`is_core`) on exercises for programs/LLM—exposed in exercise list/detail and updatable via `PATCH /api/v1/exercise/{id}`
 - Equipment management and exercise enhancements (categories, variations)
 - Complete workout structure (templates, sessions, entries, sets)
 - Advanced set tracking (RIR/RPE, percentages, tempo, rest periods)
@@ -246,101 +248,214 @@ uv run uvicorn src.app.main:app --reload
 
 ## 📚 API Endpoints
 
+Base URL: `http://localhost:8000/api/v1`. All paginated list endpoints accept `page` and `items_per_page` unless noted. Authenticated routes require `Authorization: Bearer <access_token>` unless marked public.
+
 ### Authentication
 
-- `POST /api/v1/login` - User login
-- `POST /api/v1/logout` - User logout
-- `POST /api/v1/user` - Create new user
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/login` | Login (form: username=email, password). Returns access token; sets refresh token cookie. |
+| `POST` | `/refresh` | Refresh access token using refresh token cookie. |
+| `POST` | `/logout` | Logout (invalidates tokens, clears refresh cookie). |
+| `POST` | `/user` | Create new user (public). |
+
+### Users
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/user/me/` | Current user (includes personal info: gender, weight_lbs, height_ft, height_in, birthdate, net_weight_goal, strength_goals). |
+| `PATCH` | `/user/me` | Update current user (name, email, profile_image_url, and optional personal info above). |
+| `DELETE` | `/user/me` | Delete current user and invalidate token. |
+| `GET` | `/users` | List users (paginated). |
+| `GET` | `/user/{user_id}` | Get user by ID. |
+| `GET` | `/user/{user_id}/tier` | Get user's tier info. |
+| `GET` | `/user/{user_id}/rate_limits` | Get user's rate limits (superuser). |
+| `PATCH` | `/user/{user_id}/tier` | Update user's tier (superuser). |
+| `DELETE` | `/db_user/{user_id}` | Hard delete user (superuser). |
+
+### User Profile (goals, experience, training preferences)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/user-profile` | Create current user's profile. |
+| `GET` | `/user-profile/me` | Get current user's profile. |
+| `PATCH` | `/user-profile/me` | Update current user's profile. |
 
 ### Muscle Groups
 
-- `GET /api/v1/muscle-groups` - List all muscle groups
-- `GET /api/v1/muscle-group/{id}` - Get muscle group by ID
-- `POST /api/v1/muscle-group` - Create muscle group
-- `PATCH /api/v1/muscle-group/{id}` - Update muscle group
-- `DELETE /api/v1/muscle-group/{id}` - Delete muscle group
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/muscle-groups` | List muscle groups (paginated). |
+| `GET` | `/muscle-group/{muscle_group_id}` | Get muscle group by ID. |
+| `POST` | `/muscle-group` | Create muscle group. |
+| `PATCH` | `/muscle-group/{muscle_group_id}` | Update muscle group. |
+| `DELETE` | `/muscle-group/{muscle_group_id}` | Delete muscle group. |
 
 ### Exercises
 
-- `GET /api/v1/exercises` - List all exercises
-- `GET /api/v1/exercise/{id}` - Get exercise by ID
-- `POST /api/v1/exercise` - Create exercise
-- `PATCH /api/v1/exercise/{id}` - Update exercise
-- `DELETE /api/v1/exercise/{id}` - Delete exercise
-- `POST /api/v1/exercises/sync-wger` - Sync exercises from Wger API (supports `full_sync` query parameter)
-- `GET /api/v1/exercises/export` - Export all exercises as CSV
-- `POST /api/v1/exercises/import` - Import exercises from CSV file with change data capture
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/exercises` | List exercises (paginated; optional `equipment_ids` comma-separated filter). Returns `is_core` for each exercise. Non-admins see only enabled exercises. |
+| `GET` | `/exercise/{exercise_id}` | Get exercise by ID (includes `is_core`). |
+| `POST` | `/exercise` | Create exercise (includes optional `is_core`). |
+| `PATCH` | `/exercise/{exercise_id}` | Update exercise (including `is_core`). |
+| `DELETE` | `/exercise/{exercise_id}` | Delete exercise. |
+| `POST` | `/exercises/sync-wger` | Sync from Wger API (query: `full_sync` true/false). |
+| `GET` | `/exercises/export` | Export exercises as CSV. |
+| `POST` | `/exercises/import` | Import exercises from CSV (change data capture). |
 
-### Workout Sessions (New System - Recommended)
+### Exercise–Equipment Links
 
-- `POST /api/v1/workout-session` - Create a new workout session
-- `GET /api/v1/workout-sessions` - List all workout sessions for current user (paginated)
-- `GET /api/v1/workout-session/{session_id}` - Get a specific workout session with all entries and sets
-- `PATCH /api/v1/workout-session/{session_id}` - Update a workout session
-- `DELETE /api/v1/workout-session/{session_id}` - Delete a workout session (cascades to entries and sets)
-- `POST /api/v1/workout-session/{session_id}/exercise-entry` - Add an exercise entry to a workout session
-- `GET /api/v1/workout-session/{session_id}/exercise-entries` - Get all exercise entries for a workout session (paginated)
-- `POST /api/v1/exercise-entry/{entry_id}/set` - Add a set to an exercise entry
-- `GET /api/v1/exercise-entry/{entry_id}/sets` - Get all sets for an exercise entry (paginated)
-
-### Workouts (Legacy System)
-
-- `GET /api/v1/workouts` - List user's workouts
-- `GET /api/v1/workout/{id}` - Get workout by ID
-- `POST /api/v1/workout` - Create workout
-- `PATCH /api/v1/workout/{id}` - Update workout
-- `DELETE /api/v1/workout/{id}` - Delete workout
-
-### Exercise Instances (Legacy System)
-
-- `POST /api/v1/workout/{workout_id}/exercise-instance` - Add exercise to workout
-- `DELETE /api/v1/workout/{workout_id}/exercise-instance/{id}` - Remove exercise from workout
-
-### Sets (Legacy System)
-
-- `POST /api/v1/exercise-instance/{id}/set` - Add set to exercise instance
-- `PATCH /api/v1/set/{id}` - Update set
-- `DELETE /api/v1/set/{id}` - Delete set
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/exercise/{exercise_id}/equipment/{equipment_id}` | Link equipment to exercise. |
+| `DELETE` | `/exercise/{exercise_id}/equipment/{equipment_id}` | Unlink equipment from exercise. |
+| `GET` | `/exercise/{exercise_id}/equipment` | List equipment for exercise (paginated). |
 
 ### Equipment
 
-- `GET /api/v1/equipment` - List all equipment (paginated, filters by enabled status)
-- `GET /api/v1/equipment/{equipment_id}` - Get a specific equipment item
-- `POST /api/v1/equipment` - Create equipment (admin only)
-- `PATCH /api/v1/equipment/{equipment_id}` - Update equipment (admin only)
-- `DELETE /api/v1/equipment/{equipment_id}` - Delete equipment (admin only)
-- `GET /api/v1/equipment/export` - Export all equipment as CSV
-- `POST /api/v1/equipment/import` - Import equipment from CSV file with change data capture
-- `POST /api/v1/equipment/sync-wger` - Sync equipment from Wger API (supports `full_sync` query parameter)
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/equipment` | List equipment (paginated; filter by enabled). |
+| `GET` | `/equipment/{equipment_id}` | Get equipment by ID. |
+| `POST` | `/equipment` | Create equipment (admin). |
+| `PATCH` | `/equipment/{equipment_id}` | Update equipment (admin). |
+| `DELETE` | `/equipment/{equipment_id}` | Delete equipment (admin). |
+| `GET` | `/equipment/export` | Export equipment as CSV. |
+| `POST` | `/equipment/import` | Import equipment from CSV. |
+| `POST` | `/equipment/sync-wger` | Sync equipment from Wger (`full_sync` query). |
+
+### Workout Sessions (recommended)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/workout-session` | Create workout session. |
+| `GET` | `/workout-sessions` | List current user's sessions (paginated). |
+| `GET` | `/workout-session/{session_id}` | Get session with entries and sets. |
+| `PATCH` | `/workout-session/{session_id}` | Update session. |
+| `DELETE` | `/workout-session/{session_id}` | Delete session (cascades). |
+| `POST` | `/workout-session/{session_id}/exercise-entry` | Add exercise entry to session. |
+| `GET` | `/workout-session/{session_id}/exercise-entries` | List exercise entries (paginated). |
+| `POST` | `/exercise-entry/{entry_id}/set` | Add set to entry. |
+| `GET` | `/exercise-entry/{entry_id}/sets` | List sets for entry (paginated). |
+
+### Set Entries (workout-session sets)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `PATCH` | `/set-entry/{set_id}` | Update a set (weight, reps, RIR, etc.). |
 
 ### Workout Templates
 
-- `POST /api/v1/workout-template` - Create a new workout template
-- `GET /api/v1/workout-templates` - Get workout templates (user's own and public ones, paginated)
-- `GET /api/v1/workout-template/{template_id}` - Get a specific workout template
-- `PATCH /api/v1/workout-template/{template_id}` - Update a workout template
-- `DELETE /api/v1/workout-template/{template_id}` - Delete a workout template
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/workout-template` | Create template. |
+| `GET` | `/workout-templates` | List templates (own + public, paginated). |
+| `GET` | `/workout-template/{template_id}` | Get template. |
+| `PATCH` | `/workout-template/{template_id}` | Update template. |
+| `DELETE` | `/workout-template/{template_id}` | Delete template. |
+| `POST` | `/workout-template/{template_id}/apply` | Apply template (e.g. create session from template). |
+
+### Scheduled Workouts
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/scheduled-workout` | Create scheduled workout. |
+| `GET` | `/scheduled-workouts` | List scheduled workouts (paginated). |
+| `GET` | `/scheduled-workout/{scheduled_id}` | Get scheduled workout. |
+| `PATCH` | `/scheduled-workout/{scheduled_id}` | Update scheduled workout. |
+| `DELETE` | `/scheduled-workout/{scheduled_id}` | Delete scheduled workout. |
+| `POST` | `/program/{program_id}/schedule` | Schedule a program (bulk create scheduled workouts). |
 
 ### Programs
 
-- `POST /api/v1/program` - Create a new training program
-- `GET /api/v1/programs` - Get training programs (paginated)
-- `GET /api/v1/program/{program_id}` - Get a specific program
-- `PATCH /api/v1/program/{program_id}` - Update a program
-- `DELETE /api/v1/program/{program_id}` - Delete a program
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/program` | Create program. |
+| `GET` | `/programs` | List programs (paginated). |
+| `GET` | `/program/{program_id}` | Get program. |
+| `PATCH` | `/program/{program_id}` | Update program. |
+| `DELETE` | `/program/{program_id}` | Delete program. |
+| `GET` | `/program/{program_id}/weeks` | List program weeks (paginated). |
+| `POST` | `/program/{program_id}/week` | Add week to program. |
+| `PATCH` | `/program/{program_id}/week/{week_id}` | Update program week. |
+| `GET` | `/program/{program_id}/days` | List program day assignments (paginated). |
+| `POST` | `/program/{program_id}/day` | Add day assignment (template + day label). |
+| `PATCH` | `/program/{program_id}/day/{assignment_id}` | Update day assignment. |
+| `DELETE` | `/program/{program_id}/day/{assignment_id}` | Delete day assignment. |
 
-### 1RM Tracking
+### Workouts (legacy)
 
-- `POST /api/v1/one-rm` - Create or update a 1RM record
-- `GET /api/v1/one-rm` - Get 1RM records (paginated)
-- `GET /api/v1/one-rm/{one_rm_id}` - Get a specific 1RM record
-- `PATCH /api/v1/one-rm/{one_rm_id}` - Update a 1RM record
-- `DELETE /api/v1/one-rm/{one_rm_id}` - Delete a 1RM record
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/workout` | Create workout. |
+| `GET` | `/workouts` | List user's workouts (paginated). |
+| `GET` | `/workout/{workout_id}` | Get workout. |
+| `PATCH` | `/workout/{workout_id}` | Update workout. |
+| `DELETE` | `/workout/{workout_id}` | Delete workout. |
+| `POST` | `/workout/{workout_id}/exercise-instance` | Add exercise instance. |
+| `DELETE` | `/workout/{workout_id}/exercise-instance/{exercise_instance_id}` | Remove exercise instance. |
+| `POST` | `/exercise-instance/{exercise_instance_id}/set` | Add set to instance. |
+| `PATCH` | `/set/{set_id}` | Update set. |
+| `DELETE` | `/set/{set_id}` | Delete set. |
+
+### 1RM
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/one-rm` | Create or update 1RM record. |
+| `GET` | `/one-rm` | List 1RM records (paginated). |
+| `GET` | `/one-rm/{one_rm_id}` | Get 1RM record. |
+| `PATCH` | `/one-rm/{one_rm_id}` | Update 1RM record. |
+| `DELETE` | `/one-rm/{one_rm_id}` | Delete 1RM record. |
 
 ### Analytics
 
-- `GET /api/v1/analytics/volume` - Get volume analytics
-- `GET /api/v1/analytics/strength-progression` - Get strength progression analytics
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/analytics/volume` | Get volume analytics (paginated). |
+| `POST` | `/analytics/volume/calculate` | Trigger volume calculation. |
+| `GET` | `/analytics/strength-progression` | Get strength progression (paginated). |
+| `POST` | `/analytics/strength-progression/calculate` | Trigger strength progression calculation. |
+
+### Dashboard
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/dashboard/stats` | Dashboard stats for current user. |
+
+### Posts (social)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/{username}/post` | Create post. |
+| `GET` | `/{username}/posts` | List user's posts (paginated). |
+| `GET` | `/{username}/post/{id}` | Get post. |
+| `PATCH` | `/{username}/post/{id}` | Update post. |
+| `DELETE` | `/{username}/post/{id}` | Delete post. |
+| `DELETE` | `/{username}/db_post/{id}` | Hard delete post (superuser). |
+
+### Tiers & Rate Limits (admin)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/tier` | Create tier (superuser). |
+| `GET` | `/tiers` | List tiers (paginated). |
+| `GET` | `/tier/{name}` | Get tier by name. |
+| `PATCH` | `/tier/{name}` | Update tier (superuser). |
+| `DELETE` | `/tier/{name}` | Delete tier (superuser). |
+| `POST` | `/tier/{tier_name}/rate_limit` | Create rate limit for tier (superuser). |
+| `GET` | `/tier/{tier_name}/rate_limits` | List rate limits for tier (paginated). |
+| `GET` | `/tier/{tier_name}/rate_limit/{id}` | Get rate limit. |
+| `PATCH` | `/tier/{tier_name}/rate_limit/{id}` | Update rate limit (superuser). |
+| `DELETE` | `/tier/{tier_name}/rate_limit/{id}` | Delete rate limit (superuser). |
+
+### Background Tasks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/tasks/task` | Enqueue background task (body: `message`). |
+| `GET` | `/tasks/task/{task_id}` | Get task status/result. |
 
 ---
 
