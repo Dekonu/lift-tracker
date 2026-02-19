@@ -68,25 +68,14 @@ class SQLiteSettings(DatabaseSettings):
     SQLITE_ASYNC_PREFIX: str = config("SQLITE_ASYNC_PREFIX", default="sqlite+aiosqlite:///")
 
 
-class MySQLSettings(DatabaseSettings):
-    MYSQL_USER: str = config("MYSQL_USER", default="username")
-    MYSQL_PASSWORD: str = config("MYSQL_PASSWORD", default="password")
-    MYSQL_SERVER: str = config("MYSQL_SERVER", default="localhost")
-    MYSQL_PORT: int = config("MYSQL_PORT", default=5432)
-    MYSQL_DB: str = config("MYSQL_DB", default="dbname")
-    MYSQL_URI: str = f"{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_SERVER}:{MYSQL_PORT}/{MYSQL_DB}"
-    MYSQL_SYNC_PREFIX: str = config("MYSQL_SYNC_PREFIX", default="mysql://")
-    MYSQL_ASYNC_PREFIX: str = config("MYSQL_ASYNC_PREFIX", default="mysql+aiomysql://")
-    MYSQL_URL: str | None = config("MYSQL_URL", default=None)
+class PostgresSettings(DatabaseSettings):
+    """PostgreSQL connection settings. Use POSTGRES_URL for a full URL or individual components."""
 
-
-class SupabaseSettings(DatabaseSettings):
-    SUPABASE_URL: str = config("SUPABASE_URL", default="")
-    SUPABASE_DB_PASSWORD: str = config("SUPABASE_DB_PASSWORD", default="")
-    SUPABASE_DB_HOST: str = config("SUPABASE_DB_HOST", default="")
-    SUPABASE_DB_PORT: int = config("SUPABASE_DB_PORT", default=5432)
-    SUPABASE_DB_NAME: str = config("SUPABASE_DB_NAME", default="postgres")
-    SUPABASE_DB_USER: str = config("SUPABASE_DB_USER", default="postgres")
+    POSTGRES_USER: str = config("POSTGRES_USER", default="postgres")
+    POSTGRES_PASSWORD: str = config("POSTGRES_PASSWORD", default="")
+    POSTGRES_SERVER: str = config("POSTGRES_SERVER", default="localhost")
+    POSTGRES_PORT: int = config("POSTGRES_PORT", default=5432)
+    POSTGRES_DB: str = config("POSTGRES_DB", default="lift_tracker")
     POSTGRES_SYNC_PREFIX: str = config("POSTGRES_SYNC_PREFIX", default="postgresql://")
     POSTGRES_ASYNC_PREFIX: str = config("POSTGRES_ASYNC_PREFIX", default="postgresql+asyncpg://")
     POSTGRES_URI: str | None = config("POSTGRES_URI", default=None)
@@ -94,46 +83,44 @@ class SupabaseSettings(DatabaseSettings):
 
     @property
     def database_uri(self) -> str:
-        """Get database URI, preferring direct URL or constructing from components."""
+        """Get database URI (without protocol), preferring POSTGRES_URL or constructing from components."""
         if self.POSTGRES_URL:
-            # Parse and fix the URL to handle special characters in password
             url = self.POSTGRES_URL.strip()
-
-            # Remove protocol if present to get the URI part
             uri = url
             if url.startswith("postgresql+asyncpg://"):
                 uri = url.replace("postgresql+asyncpg://", "", 1)
             elif url.startswith("postgresql://"):
                 uri = url.replace("postgresql://", "", 1)
-
-            # Parse the URI manually to handle special characters in password
-            # Format: user:password@host:port/database
-            # Use regex to extract components before @ symbol
             match = re.match(r"^([^:]+):([^@]+)@(.+)$", uri)
             if match:
                 username, password, rest = match.groups()
-                # URL-encode the password
                 encoded_password = quote_plus(password)
-                # Reconstruct URI with encoded password
-                encoded_uri = f"{username}:{encoded_password}@{rest}"
-                return encoded_uri
-
-            # If no match (no password or different format), return as-is
+                return f"{username}:{encoded_password}@{rest}"
             return uri
         if self.POSTGRES_URI:
             return self.POSTGRES_URI
-        # Check if we have valid Supabase connection details
-        if not self.SUPABASE_DB_HOST:
-            raise ValueError(
-                "Database connection not configured. Please set POSTGRES_URL or SUPABASE_DB_HOST in your .env file. "
-                "See supabase_schema.sql for setup instructions."
-            )
-        # URL-encode password to handle special characters
-        encoded_password = quote_plus(self.SUPABASE_DB_PASSWORD)
+        encoded_password = quote_plus(self.POSTGRES_PASSWORD)
         return (
-            f"{self.SUPABASE_DB_USER}:{encoded_password}@"
-            f"{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
+            f"{self.POSTGRES_USER}:{encoded_password}@"
+            f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+
+    @property
+    def database_url_async(self) -> str:
+        """Full async PostgreSQL URL (e.g. for Alembic and the PostgreSQL adapter)."""
+        return f"{self.POSTGRES_ASYNC_PREFIX}{self.database_uri}"
+
+
+def get_async_database_url() -> str:
+    """Return async database URL; falls back to SQLite in test/local if PostgreSQL is not configured."""
+    import os
+
+    try:
+        return settings.database_url_async
+    except ValueError:
+        if os.getenv("ENVIRONMENT") == "local" or os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI"):
+            return f"{settings.SQLITE_ASYNC_PREFIX}{settings.SQLITE_URI}"
+        raise
 
 
 class FirstUserSettings(BaseSettings):
@@ -235,7 +222,7 @@ class EnvironmentSettings(BaseSettings):
 class Settings(
     AppSettings,
     SQLiteSettings,
-    SupabaseSettings,
+    PostgresSettings,
     CryptSettings,
     FirstUserSettings,
     TestSettings,

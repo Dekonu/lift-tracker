@@ -1,5 +1,5 @@
--- Create admin user in Supabase
--- Run this in Supabase SQL Editor
+-- Create admin user (PostgreSQL)
+-- Run this in your PostgreSQL client or use the app script: uv run python -m src.scripts.create_first_superuser
 
 -- First, check if admin user exists
 SELECT id, email, name, is_superuser 

@@ -34,7 +34,7 @@ alwaysApply: true
   Dependencies
   - FastAPI
   - Pydantic v2
-  - Async database libraries like asyncpg or aiomysql
+  - Async database: asyncpg (PostgreSQL) via adapters
   - SQLAlchemy 2.0 (if using ORM features)
   
   FastAPI-Specific Guidelines

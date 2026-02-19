@@ -1,5 +1,5 @@
--- Supabase Database Schema for Lift Tracker
--- Run this SQL in your Supabase SQL Editor to set up the database
+-- PostgreSQL Database Schema for Lift Tracker
+-- Run this SQL in your PostgreSQL database to set up the schema
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -143,7 +143,8 @@ CREATE TABLE IF NOT EXISTS post (
 
 CREATE INDEX IF NOT EXISTS idx_post_created_by_user_id ON post(created_by_user_id);
 
--- Enable Row Level Security (RLS) for Supabase
+-- Optional: Enable Row Level Security (RLS). Policies below use auth.uid() which is
+-- Supabase-specific; for standard PostgreSQL, skip this section or define your own policies.
 ALTER TABLE "user" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workout ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exercise_instance ENABLE ROW LEVEL SECURITY;
@@ -196,4 +197,3 @@ CREATE POLICY "Anyone can view exercises" ON exercise
 
 CREATE POLICY "Anyone can view muscle groups" ON muscle_group
     FOR SELECT USING (true);
-

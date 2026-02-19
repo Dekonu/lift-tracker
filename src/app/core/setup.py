@@ -34,12 +34,8 @@ from .utils import cache, queue
 # -------------- database --------------
 async def create_tables() -> None:
     """
-    Create database tables, handling asyncpg prepared statement conflicts.
-
-    This function attempts to create tables but gracefully handles errors that can occur
-    with connection poolers (like Supabase's pooler) that don't fully support prepared statements.
-    If table creation fails due to prepared statement conflicts, we log a warning and continue,
-    as the tables may already exist or will be created on the next successful connection.
+    Create database tables. On prepared-statement or pooler conflicts, retries or continues
+    so the app can start; tables may already exist or will be created on first use.
     """
     import logging
 
@@ -55,8 +51,7 @@ async def create_tables() -> None:
                 logger.info("Database tables created successfully after retry")
             return
         except Exception as e:
-            # Handle DuplicatePreparedStatementError which can occur with connection poolers
-            # This is a known issue with asyncpg and Supabase's pooler
+            # Handle DuplicatePreparedStatementError which can occur with some connection poolers
             error_str = str(e)
             is_prepared_statement_error = (
                 "DuplicatePreparedStatementError" in error_str or "prepared statement" in error_str.lower()

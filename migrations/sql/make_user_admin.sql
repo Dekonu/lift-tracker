@@ -1,5 +1,5 @@
--- Make a user a superuser in Supabase
--- Run this in Supabase SQL Editor after creating the user via signup
+-- Make a user a superuser (PostgreSQL)
+-- Run in your PostgreSQL client after creating the user via the API
 
 -- Replace 'admin@admin.com' with the email you used to sign up
 UPDATE "user" 
